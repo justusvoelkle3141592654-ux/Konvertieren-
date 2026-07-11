@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAC-MAN C64</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #4038d0;           /* C64 Hintergrundblau */
+    color: #a8a8ff;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+    overflow: hidden;
+    height: 100%;
+    -webkit-font-smoothing: none;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 8px;
+    box-sizing: border-box;
+  }
+  #frame {
+    background: #6c5eff;           /* C64 heller Rahmen */
+    padding: 14px;
+    border-radius: 4px;
+  }
+  #screen {
+    background: #000;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    width: 448px;
+    height: 496px;
+    touch-action: none;
+  }
+  #hint {
+    margin-top: 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #7a72ff;
+  }
+  @media (max-width: 480px) {
+    #screen { width: 92vw; height: calc(92vw * 1.107); }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="frame">
+    <canvas id="screen" width="224" height="248"></canvas>
+  </div>
+  <div id="hint">PFEILTASTEN / WISCHEN &nbsp;•&nbsp; P = PAUSE &nbsp;•&nbsp; LEERTASTE = START</div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   PAC-MAN  –  C64 Homecomputer-Stil
+   Ein einzelner, in sich geschlossener Canvas-Nachbau des Klassikers.
+   Gitter: 28 x 31 Kacheln, je 8 Pixel  =>  224 x 248 Pixel Spielfeld.
+   ========================================================================= */
+
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const TILE = 8;
+const COLS = 28;
+const ROWS = 31;
+
+/* ---- C64-Farbpalette (angelehnt an das VIC-II) ---- */
+const C = {
+  black:   '#000000',
+  blue:    '#4038d0',   // Wände
+  ltblue:  '#7a72ff',
+  cyan:    '#7bd3f7',
+  white:   '#ffffff',
+  yellow:  '#ffff5c',   // Pac-Man
+  red:     '#ff5959',   // Blinky
+  pink:    '#ffb0e0',   // Pinky
+  orange:  '#ffb45c',   // Clyde
+  dot:     '#ffd8a8',
+  fright:  '#3f3fff',   // erschrocken
+  frightW: '#ffffff',
+};
+
+/* ---- Labyrinth-Karte ----
+   # = Wand   . = Punkt   o = Power-Pille   ' ' = leer
+   - = Geister-Tor        (Spielfeld ist 28 breit)                          */
+const MAP = [
+  "############################",
+  "#............##............#",
+  "#.####.#####.##.#####.####.#",
+  "#o####.#####.##.#####.####o#",
+  "#.####.#####.##.#####.####.#",
+  "#..........................#",
+  "#.####.##.########.##.####.#",
+  "#.####.##.########.##.####.#",
+  "#......##....##....##......#",
+  "######.#####.##.#####.######",
+  "######.#####.##.#####.######",
+  "######.##..........##.######",
+  "######.##.###--###.##.######",
+  "######.##.#      #.##.######",
+  "      .   #      #   .      ",
+  "######.##.#      #.##.######",
+  "######.##.########.##.######",
+  "######.##..........##.######",
+  "######.##.########.##.######",
+  "######.##.########.##.######",
+  "#............##............#",
+  "#.####.#####.##.#####.####.#",
+  "#.####.#####.##.#####.####.#",
+  "#o..##.......  .......##..o#",
+  "###.##.##.########.##.##.###",
+  "###.##.##.########.##.##.###",
+  "#......##....##....##......#",
+  "#.##########.##.##########.#",
+  "#.##########.##.##########.#",
+  "#..........................#",
+  "############################",
+];
+
+/* Arbeitskopie des Gitters (Punkte werden verändert) */
+let grid = [];
+let dotsTotal = 0;
+
+function resetGrid() {
+  grid = MAP.map(r => r.split(''));
+  dotsTotal = 0;
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++)
+      if (grid[y][x] === '.' || grid[y][x] === 'o') dotsTotal++;
+}
+
+function tileAt(x, y) {
+  if (y < 0 || y >= ROWS) return '#';
+  if (x < 0 || x >= COLS) return ' ';      // Tunnel-Ränder = frei
+  return grid[y][x];
+}
+function isWall(x, y) {
+  const t = tileAt(x, y);
+  return t === '#';
+}
+
+/* ------------------------------------------------------------------ */
+/*  Akteure                                                            */
+/* ------------------------------------------------------------------ */
+const SPEED = 1.0;                // Pixel pro Frame (Pac-Man)
+const DIRS = {
+  left:  {x:-1, y: 0},
+  right: {x: 1, y: 0},
+  up:    {x: 0, y:-1},
+  down:  {x: 0, y: 1},
+  none:  {x: 0, y: 0},
+};
+
+function makePac() {
+  return {
+    x: 14 * TILE,           // Pixelposition (Mittelpunkt-Kachel-Basis)
+    y: 23 * TILE + 4,
+    dir: 'left',
+    next: 'left',
+    mouth: 0,
+  };
+}
+
+/* Geisterdefinition – Start, Farbe, Scatter-Ziel */
+function makeGhosts() {
+  return [
+    { name:'blinky', color:C.red,    x:14*TILE, y:11*TILE+4, dir:'left',  scatter:{x:25,y:0},  mode:'scatter', inHouse:false, dot:0,  speed:0.9 },
+    { name:'pinky',  color:C.pink,   x:14*TILE, y:14*TILE+4, dir:'down',  scatter:{x:2,y:0},   mode:'house',   inHouse:true,  dot:0,  speed:0.9 },
+    { name:'inky',   color:C.cyan,   x:12*TILE, y:14*TILE+4, dir:'up',    scatter:{x:27,y:31}, mode:'house',   inHouse:true,  dot:30, speed:0.9 },
+    { name:'clyde',  color:C.orange, x:16*TILE, y:14*TILE+4, dir:'up',    scatter:{x:0,y:31},  mode:'house',   inHouse:true,  dot:60, speed:0.9 },
+  ];
+}
+
+let pac, ghosts;
+let score, lives, level, frightTimer, dotsEaten;
+let state = 'ready';   // ready | play | dying | win | over | paused
+let stateTimer = 0;
+let ghostCombo = 0;
+let modeTimer, modePhase, globalPhase;
+
+/* Scatter/Chase-Phasenwechsel (Frames bei 60 fps) */
+const PHASES = [7*60, 20*60, 7*60, 20*60, 5*60, 20*60, 5*60, Infinity];
+
+function newLevel(full) {
+  resetGrid();
+  pac = makePac();
+  ghosts = makeGhosts();
+  frightTimer = 0;
+  dotsEaten = 0;
+  ghostCombo = 0;
+  modePhase = 0;
+  modeTimer = PHASES[0];
+  if (full) { score = 0; lives = 3; level = 1; }
+  state = 'ready';
+  stateTimer = 120;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Eingabe                                                            */
+/* ------------------------------------------------------------------ */
+const keyDir = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down',
+                 a:'left', d:'right', w:'up', s:'down' };
+
+document.addEventListener('keydown', e => {
+  if (keyDir[e.key]) { pac.next = keyDir[e.key]; e.preventDefault(); }
+  else if (e.key === ' ') {
+    if (state === 'ready') { state = 'play'; }
+    else if (state === 'over' || state === 'win') newLevel(true);
+    e.preventDefault();
+  }
+  else if (e.key === 'p' || e.key === 'P') {
+    if (state === 'play') state = 'paused';
+    else if (state === 'paused') state = 'play';
+  }
+});
+
+/* Touch / Wischen */
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (state === 'ready') state = 'play';
+  else if (state === 'over' || state === 'win') newLevel(true);
+}, {passive:true});
+canvas.addEventListener('touchmove', e => {
+  if (!touchStart) return;
+  const dx = e.touches[0].clientX - touchStart.x;
+  const dy = e.touches[0].clientY - touchStart.y;
+  if (Math.abs(dx) + Math.abs(dy) < 20) return;
+  if (Math.abs(dx) > Math.abs(dy)) pac.next = dx > 0 ? 'right' : 'left';
+  else pac.next = dy > 0 ? 'down' : 'up';
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, {passive:true});
+canvas.addEventListener('touchend', () => { touchStart = null; }, {passive:true});
+
+/* ------------------------------------------------------------------ */
+/*  Bewegungshilfen (Kachel-zentriertes Fahren)                       */
+/* ------------------------------------------------------------------ */
+function centered(v) {                 // ist Akteur genau in Kachelmitte?
+  return ((v - 4) % TILE) === 0;
+}
+function tileX(a) { return Math.round((a.x - 4) / TILE); }
+function tileY(a) { return Math.round((a.y - 4) / TILE); }
+
+function canGo(a, dir) {
+  const d = DIRS[dir];
+  const tx = tileX(a) + d.x;
+  const ty = tileY(a) + d.y;
+  return !isWall(tx, ty);
+}
+
+/* Tunnel-Umbruch links/rechts */
+function wrap(a) {
+  if (a.x < -4) a.x = COLS * TILE + 3;
+  if (a.x > COLS * TILE + 3) a.x = -4;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pac-Man Update                                                    */
+/* ------------------------------------------------------------------ */
+function updatePac() {
+  // Richtungswechsel nur in Kachelmitte erlaubt
+  if (centered(pac.x) && centered(pac.y)) {
+    if (pac.next !== pac.dir && canGo(pac, pac.next)) pac.dir = pac.next;
+    if (!canGo(pac, pac.dir)) { /* an Wand: stehen bleiben */ }
+  }
+  if (canGo(pac, pac.dir) || !(centered(pac.x) && centered(pac.y))) {
+    const d = DIRS[pac.dir];
+    pac.x += d.x * SPEED;
+    pac.y += d.y * SPEED;
+  }
+  wrap(pac);
+  pac.mouth = (pac.mouth + 0.18) % (Math.PI);
+
+  // Punkte fressen
+  if (centered(pac.x) && centered(pac.y)) {
+    const tx = tileX(pac), ty = tileY(pac);
+    const t = grid[ty] && grid[ty][tx];
+    if (t === '.') {
+      grid[ty][tx] = ' '; score += 10; dotsEaten++; eatDot();
+    } else if (t === 'o') {
+      grid[ty][tx] = ' '; score += 50; dotsEaten++;
+      frightTimer = Math.max(60, 420 - level*30);
+      ghostCombo = 0;
+      for (const g of ghosts) if (g.mode !== 'eaten') g.mode = 'fright';
+      eatDot();
+    }
+    if (dotsEaten >= dotsTotal) { state = 'win'; stateTimer = 120; }
+  }
+
+  // Kollision Geister
+  for (const g of ghosts) {
+    if (Math.abs(g.x - pac.x) < 6 && Math.abs(g.y - pac.y) < 6) {
+      if (g.mode === 'fright') {
+        g.mode = 'eaten';
+        ghostCombo++;
+        score += 200 * Math.pow(2, ghostCombo-1);
+      } else if (g.mode !== 'eaten') {
+        state = 'dying'; stateTimer = 90;
+      }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Geister-KI                                                        */
+/* ------------------------------------------------------------------ */
+const HOUSE_EXIT = {x:14, y:11};
+
+function ghostTarget(g) {
+  // Zielkachel je nach Modus
+  if (g.mode === 'eaten')   return {x:14, y:14};             // zurück ins Haus
+  if (g.mode === 'scatter') return g.scatter;
+  const px = tileX(pac), py = tileY(pac);
+  switch (g.name) {
+    case 'blinky': return {x:px, y:py};
+    case 'pinky': {
+      const d = DIRS[pac.dir];
+      return {x:px + d.x*4, y:py + d.y*4};
+    }
+    case 'inky': {
+      const b = ghosts[0];
+      const d = DIRS[pac.dir];
+      const ax = px + d.x*2, ay = py + d.y*2;
+      return {x: ax + (ax - tileX(b)), y: ay + (ay - tileY(b))};
+    }
+    case 'clyde': {
+      const dist = Math.hypot(px - tileX(g), py - tileY(g));
+      return dist > 8 ? {x:px, y:py} : g.scatter;
+    }
+  }
+  return {x:px, y:py};
+}
+
+const OPP = { left:'right', right:'left', up:'down', down:'up' };
+
+function updateGhost(g) {
+  // Haus-Logik: heraussteigen wenn genug Punkte gefressen
+  if (g.inHouse) {
+    if (dotsEaten >= g.dot || g.mode === 'eaten') {
+      // sanft zum Ausgang schieben
+      const targetX = 14*TILE, targetY = 11*TILE+4;
+      if (Math.abs(g.x - targetX) > 1) g.x += g.x < targetX ? 0.5 : -0.5;
+      else { g.x = targetX; if (g.y > targetY) g.y -= 0.6; else { g.y = targetY; g.inHouse = false; g.mode = modePhase % 2 === 0 ? 'scatter':'chase'; } }
+      return;
+    } else {
+      // im Haus auf und ab wippen
+      g.y += g.dir === 'up' ? -0.4 : 0.4;
+      if (g.y < 13*TILE+4) g.dir = 'down';
+      if (g.y > 15*TILE+4) g.dir = 'up';
+      return;
+    }
+  }
+
+  // Eaten am Ziel angekommen -> wiederbeleben
+  if (g.mode === 'eaten' && tileX(g) === 14 && Math.abs(g.y - (14*TILE+4)) < 3) {
+    g.inHouse = true; g.mode = 'chase'; g.dir = 'up';
+    return;
+  }
+
+  const speed = g.mode === 'fright' ? 0.55
+              : g.mode === 'eaten'  ? 1.6
+              : g.speed + level*0.02;
+
+  // Entscheidung nur in Kachelmitte
+  if (centered(g.x) && centered(g.y)) {
+    const target = ghostTarget(g);
+    let best = null, bestDist = Infinity;
+    for (const dir of ['up','left','down','right']) {  // Tie-Break-Reihenfolge
+      if (dir === OPP[g.dir]) continue;                 // nicht umkehren
+      if (!canGo(g, dir)) continue;
+      const d = DIRS[dir];
+      const nx = tileX(g) + d.x, ny = tileY(g) + d.y;
+      // Tor nur passieren wenn eaten/ins Haus
+      const dist = (nx - target.x)**2 + (ny - target.y)**2;
+      if (g.mode === 'fright') {                        // erschrocken = zufällig
+        if (best === null || Math.random() < 0.5) { best = dir; }
+      } else if (dist < bestDist) { bestDist = dist; best = dir; }
+    }
+    if (best) g.dir = best;
+  }
+
+  const d = DIRS[g.dir];
+  g.x += d.x * speed;
+  g.y += d.y * speed;
+  wrap(g);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Modus-Timer (Scatter <-> Chase)                                   */
+/* ------------------------------------------------------------------ */
+function updateModes() {
+  if (frightTimer > 0) { frightTimer--; if (frightTimer === 0) {
+    for (const g of ghosts) if (g.mode === 'fright') g.mode = 'chase';
+  } return; }
+
+  if (modeTimer !== Infinity) {
+    modeTimer--;
+    if (modeTimer <= 0 && modePhase < PHASES.length-1) {
+      modePhase++;
+      modeTimer = PHASES[modePhase];
+      const want = (modePhase % 2 === 0) ? 'scatter' : 'chase';
+      for (const g of ghosts)
+        if (g.mode === 'scatter' || g.mode === 'chase') {
+          g.mode = want;
+          g.dir = OPP[g.dir] && canGo(g, OPP[g.dir]) ? OPP[g.dir] : g.dir; // Umkehr
+        }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Zeichnen                                                          */
+/* ------------------------------------------------------------------ */
+function drawMaze() {
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const t = MAP[y][x];
+      const px = x*TILE, py = y*TILE;
+      if (t === '#') {
+        // C64-Wandblock mit hellerer Kante
+        ctx.fillStyle = C.blue;
+        ctx.fillRect(px+1, py+1, TILE-1, TILE-1);
+        ctx.fillStyle = C.ltblue;
+        ctx.fillRect(px+1, py+1, TILE-1, 1);
+        ctx.fillRect(px+1, py+1, 1, TILE-1);
+      } else if (t === '-') {
+        ctx.fillStyle = C.pink;
+        ctx.fillRect(px, py+3, TILE, 2);
+      }
+      const g = grid[y] && grid[y][x];
+      if (g === '.') {
+        ctx.fillStyle = C.dot;
+        ctx.fillRect(px+3, py+3, 2, 2);
+      } else if (g === 'o') {
+        // blinkende Power-Pille
+        if (Math.floor(Date.now()/200) % 2 === 0) {
+          ctx.fillStyle = C.dot;
+          ctx.beginPath();
+          ctx.arc(px+4, py+4, 3.2, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+}
+
+function drawPac() {
+  const cx = pac.x, cy = pac.y;
+  ctx.fillStyle = C.yellow;
+  ctx.beginPath();
+  const open = (state==='dying') ? 0 : Math.abs(Math.sin(pac.mouth)) * 0.32 * Math.PI;
+  let a0 = open, a1 = Math.PI*2 - open;
+  // Mund in Fahrtrichtung ausrichten
+  const rot = { right:0, down:Math.PI/2, left:Math.PI, up:-Math.PI/2 }[pac.dir] || 0;
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, 4.2, a0+rot, a1+rot);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawGhost(g) {
+  const cx = g.x, cy = g.y, r = 4.2;
+  let body = g.color;
+  if (g.mode === 'fright') {
+    body = (frightTimer < 120 && Math.floor(frightTimer/15)%2===0) ? C.frightW : C.fright;
+  } else if (g.mode === 'eaten') {
+    body = null; // nur Augen
+  }
+  if (body) {
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(cx, cy-0.5, r, Math.PI, 0);
+    ctx.lineTo(cx+r, cy+r);
+    // gezackter Rock
+    for (let i=0;i<3;i++){
+      ctx.lineTo(cx+r - (i*2+1)*(r*2/6), cy+r-2);
+      ctx.lineTo(cx+r - (i*2+2)*(r*2/6), cy+r);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Augen (auch bei eaten)
+  const look = DIRS[g.dir] || DIRS.none;
+  const ex = look.x*1.1, ey = look.y*1.1;
+  ctx.fillStyle = (g.mode==='fright' && body!==C.frightW) ? '#ffb0e0' : '#ffffff';
+  if (g.mode==='fright') {
+    ctx.fillStyle = C.frightW;
+    ctx.fillRect(cx-2.4, cy-1, 1.5, 1.5);
+    ctx.fillRect(cx+1, cy-1, 1.5, 1.5);
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cx-1.6, cy-0.6, 1.5, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+1.6, cy-0.6, 1.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2020c0';
+    ctx.beginPath(); ctx.arc(cx-1.6+ex, cy-0.6+ey, 0.8, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+1.6+ex, cy-0.6+ey, 0.8, 0, 7); ctx.fill();
+  }
+}
+
+/* C64-Blockschrift für kurze Texte */
+function text(str, x, y, col) {
+  ctx.fillStyle = col || C.white;
+  ctx.font = '8px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(str, x, y);
+}
+function centerText(str, y, col) {
+  ctx.fillStyle = col || C.white;
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(str, canvas.width/2, y);
+}
+
+function drawHUD() {
+  ctx.textAlign = 'left';
+  text('1UP', 8, 0, C.white);
+  text(String(score).padStart(6,'0'), 8, 8, C.dot);
+  text('LEVEL ' + level, canvas.width-64, 0, C.cyan);
+  // Leben unten
+  for (let i=0;i<lives;i++){
+    const lx = 10 + i*12, ly = ROWS*TILE - 0;
+    ctx.fillStyle = C.yellow;
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4, 0.25*Math.PI, 1.75*Math.PI);
+    ctx.lineTo(lx, ly);
+    ctx.fill();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sound (kleiner WebAudio-Blip im C64-Geist)                        */
+/* ------------------------------------------------------------------ */
+let actx = null;
+function beep(freq, dur, type) {
+  try {
+    if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'square';
+    o.frequency.value = freq;
+    g.gain.value = 0.04;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.stop(actx.currentTime + dur);
+  } catch(e){}
+}
+let dotToggle = false;
+function eatDot() { dotToggle = !dotToggle; beep(dotToggle?520:440, 0.05); }
+
+/* ------------------------------------------------------------------ */
+/*  Hauptschleife                                                     */
+/* ------------------------------------------------------------------ */
+function loop() {
+  // ----- Update -----
+  if (state === 'play') {
+    updateModes();
+    updatePac();
+    if (state === 'play') for (const g of ghosts) updateGhost(g);
+  } else if (state === 'dying') {
+    stateTimer--;
+    if (stateTimer <= 0) {
+      lives--;
+      if (lives < 0) { state = 'over'; }
+      else {
+        pac = makePac(); ghosts = makeGhosts();
+        frightTimer = 0; state = 'ready'; stateTimer = 90;
+        modePhase = 0; modeTimer = PHASES[0];
+      }
+    }
+  } else if (state === 'ready') {
+    stateTimer--;
+    if (stateTimer <= 0) state = 'play';
+  } else if (state === 'win') {
+    stateTimer--;
+    if (stateTimer <= 0) { level++; newLevel(false); }
+  }
+
+  // ----- Zeichnen -----
+  ctx.fillStyle = C.black;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(0, 8);          // Platz für HUD oben
+  drawMaze();
+  if (state !== 'dying' || Math.floor(stateTimer/6)%2===0) drawPac();
+  if (state !== 'dying' && state !== 'over')
+    for (const g of ghosts) drawGhost(g);
+  ctx.restore();
+  drawHUD();
+
+  if (state === 'ready')  centerText('READY!', canvas.height/2+16, C.yellow);
+  if (state === 'paused') centerText('PAUSE', canvas.height/2, C.cyan);
+  if (state === 'over') {
+    centerText('GAME OVER', canvas.height/2, C.red);
+    centerText('LEERTASTE = NEU', canvas.height/2+18, C.ltblue);
+  }
+  if (state === 'win') centerText('LEVEL ' + level + ' GESCHAFFT!', canvas.height/2, C.yellow);
+
+  requestAnimationFrame(loop);
+}
+
+/* ---- Start ---- */
+newLevel(true);
+loop();
+</script>
+</body>
+</html>
