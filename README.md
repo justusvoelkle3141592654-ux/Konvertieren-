@@ -74,6 +74,46 @@ und LibreOffice werden erkannt und mit Installationshinweisen angezeigt.
     └── system_check.py           # Prüft ffmpeg, LibreOffice, Pakete
 ```
 
+## 📱 Android-App (APK) & Web-Version
+
+Neben der Desktop-Version gibt es den Konverter auch als **Android-App** und
+als **eigenständige Website** – beide wandeln Dateien komplett lokal auf dem
+Gerät um (nichts wird hochgeladen).
+
+### APK installieren
+
+Die fertige App liegt unter [`android/UniversalConverter.apk`](android/UniversalConverter.apk).
+
+1. APK auf das Handy übertragen (oder direkt auf dem Handy herunterladen).
+2. Die Datei antippen. Beim ersten Mal fragt Android nach der Erlaubnis,
+   „Apps aus dieser Quelle" zu installieren – bestätigen.
+3. App öffnen, Datei wählen, Zielformat wählen, konvertieren. Das Ergebnis
+   wird über den „Speichern unter"-Dialog z.B. im Downloads-Ordner abgelegt.
+
+Die App unterstützt: **Bilder** (JPG/PNG/WEBP/GIF/BMP → JPG/PNG/WEBP/PDF),
+**Daten** (CSV ↔ XLSX ↔ JSON) und **TXT → PDF**. Audio, Video und
+DOCX/PDF-Dokumente übernimmt die Desktop-Version (dafür wird ffmpeg bzw.
+LibreOffice benötigt, das auf Handys nicht verfügbar ist).
+
+### Web-Version
+
+Der Ordner [`web/`](web/) enthält dieselbe App als normale Website –
+einfach `web/index.html` im Browser öffnen oder den Ordner auf einen
+beliebigen Webspace (z.B. GitHub Pages) legen. Ohne Android-Umgebung nutzt
+sie den normalen Browser-Download.
+
+### APK selbst bauen
+
+```bash
+sudo apt install default-jdk-headless aapt zipalign apksigner \
+                 dalvik-exchange android-sdk-platform-23
+cd android && sh build_apk.sh
+```
+
+Das Skript kompiliert die App ohne Gradle/Android Studio und signiert sie mit
+dem mitgelieferten Debug-Schlüssel (`android/debug.keystore`, Passwort
+`android` – nur für den Eigengebrauch gedacht, nicht für den Play Store).
+
 ## Robustheit
 
 - Jede Konvertierung ist in Fehlerbehandlung eingebettet – die App stürzt nie
