@@ -10,6 +10,12 @@
 <script src="lib/pdf.worker.min.js"></script>
 <script src="lib/pptxgen.bundle.js"></script>
 <script src="lib/jszip.min.js"></script>
+<script src="lib/marked.min.js"></script>
+<script src="lib/turndown.js"></script>
+<script src="lib/js-yaml.min.js"></script>
+<script src="lib/lame.min.js"></script>
+<script src="lib/utif.js"></script>
+<script src="lib/gifenc.js"></script>
 <style>
   :root {
     --bg: #0f1117; --card: #1a1d27; --card2: #232736;
@@ -31,14 +37,15 @@
   }
   .wrap { width: 100%; max-width: 520px; }
   h1 { font-size: 1.45rem; text-align: center; margin: 10px 0 4px; }
-  .sub { text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: 18px; }
+  .sub { text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: 4px; }
+  .stats { text-align: center; color: var(--accent); font-size: .82rem; margin-bottom: 16px; font-weight: 600; }
   .card {
     background: var(--card); border-radius: var(--radius);
     padding: 18px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.15);
   }
   #dropzone {
     border: 2px dashed var(--muted); border-radius: var(--radius);
-    padding: 34px 16px; text-align: center; cursor: pointer;
+    padding: 30px 16px; text-align: center; cursor: pointer;
     transition: border-color .2s, background .2s;
   }
   #dropzone.drag { border-color: var(--accent); background: var(--card2); }
@@ -47,13 +54,20 @@
   #fileinput { display: none; }
   .fileinfo { display: none; }
   .fileinfo.show { display: block; }
-  .fname { font-weight: 600; word-break: break-all; margin-bottom: 4px; }
-  .fmeta { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
+  .fname { font-weight: 600; word-break: break-all; margin: 14px 0 4px; }
+  .fmeta { color: var(--muted); font-size: .85rem; margin-bottom: 12px; }
   label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
-  select {
-    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--card2);
-    background: var(--card2); color: var(--text); font-size: 1rem; margin-bottom: 14px;
+  input[type="search"], input[type="text"] {
+    width: 100%; padding: 11px 12px; border-radius: 10px;
+    border: 1px solid var(--card2); background: var(--card2);
+    color: var(--text); font-size: .98rem; margin-bottom: 10px;
   }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip {
+    padding: 9px 14px; border-radius: 999px; border: 1px solid var(--card2);
+    background: var(--card2); color: var(--text); font-size: .95rem; cursor: pointer;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   button.primary {
     width: 100%; padding: 14px; border: none; border-radius: 10px;
     background: var(--accent); color: #fff; font-size: 1.05rem; font-weight: 600;
@@ -68,6 +82,12 @@
   .msg.info { background: rgba(79,140,255,.12); color: var(--accent); }
   .formats { color: var(--muted); font-size: .85rem; line-height: 1.7; }
   .formats b { color: var(--text); }
+  .hit {
+    padding: 10px 12px; border-radius: 10px; background: var(--card2);
+    margin-bottom: 8px; font-size: .88rem; line-height: 1.6; word-break: break-word;
+  }
+  .hit .cat { color: var(--muted); font-size: .8rem; }
+  .nohit { color: var(--muted); font-size: .88rem; padding: 6px 2px; }
   .spinner {
     display: none; margin: 12px auto 0; width: 26px; height: 26px;
     border: 3px solid var(--card2); border-top-color: var(--accent);
@@ -81,6 +101,7 @@
 <div class="wrap">
   <h1>🔄 Universal File Converter</h1>
   <p class="sub">Alles läuft lokal auf deinem Gerät – nichts wird hochgeladen.</p>
+  <p class="stats" id="stats"></p>
 
   <div class="card">
     <div id="dropzone">
@@ -90,536 +111,40 @@
     <input type="file" id="fileinput">
 
     <div class="fileinfo" id="fileinfo">
-      <div style="height:14px"></div>
       <div class="fname" id="fname"></div>
       <div class="fmeta" id="fmeta"></div>
-      <label for="target">Zielformat</label>
-      <select id="target"></select>
+      <label for="targetfilter">Zielformat (tippen zum Suchen)</label>
+      <input type="search" id="targetfilter" placeholder="z.B. pdf" autocomplete="off">
+      <div class="chips" id="targetlist"></div>
       <button class="primary" id="convertbtn">🚀 Konvertieren</button>
       <div class="spinner" id="spinner"></div>
     </div>
     <div class="msg" id="msg"></div>
   </div>
 
+  <div class="card">
+    <label for="formatsearch">🔍 Format-Suche: Was kann diese App?</label>
+    <input type="search" id="formatsearch"
+           placeholder="Format eingeben, z.B. docx, mp3, heic …" autocomplete="off">
+    <div id="searchresults"></div>
+  </div>
+
   <div class="card formats">
-    <b>Unterstützte Umwandlungen:</b><br>
-    📄 PDF → PPTX, JPG, PNG, TXT<br>
-    📽️ PPTX → PDF, TXT<br>
-    📝 DOCX → PDF, TXT &nbsp;·&nbsp; TXT → PDF, CSV<br>
-    🖼️ Bilder (JPG, PNG, WEBP, GIF, BMP) → JPG, PNG, WEBP, PDF<br>
-    📊 Daten: CSV ↔ XLSX ↔ JSON<br>
+    <b>Überblick:</b><br>
+    📄 Dokumente: PDF ↔ PPTX · DOCX, ODT, ODP, EPUB, RTF → PDF/TXT/HTML/…<br>
+    📝 Text &amp; Code: 80+ Formate (MD, HTML, JSON, YAML, XML, SRT, VTT,
+    IPYNB, Quellcode …) → PDF, HTML, DOCX, EPUB, TXT<br>
+    📊 Tabellen: CSV, TSV, XLSX, XLS, ODS, DIF, SLK, PRN, DBF ↔ untereinander + JSON<br>
+    🖼️ Bilder: JPG, PNG, WEBP, GIF, BMP, TIFF, SVG, ICO, AVIF → PNG/JPG/WEBP/BMP/GIF/TIFF/ICO/PDF<br>
+    🎵 Audio: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS → MP3/WAV<br>
+    🎬 Video: MP4, WEBM, MOV, MKV → Standbild (PNG/JPG) + Tonspur (MP3/WAV)<br>
     <br>
-    Hinweis: PDF → PPTX legt jede PDF-Seite als Folienbild an
-    (originalgetreu, aber nicht als editierbarer Text).
-    PPTX/DOCX → PDF übernimmt Texte und Bilder in einem
-    vereinfachten Layout. Audio &amp; Video wandelt die Desktop-Version um.
+    Nicht jede Kombination ist technisch sinnvoll (ein Bild kann z.B. keine
+    Musik werden) – die App zeigt dir pro Datei genau die Ziele, die möglich sind.
   </div>
 </div>
 
-<script>
-"use strict";
-
-/* pdf.js: Worker läuft als normales Skript auf dem Hauptthread ("fake worker").
-   Nötig, weil echte Web Worker aus file:///android_asset heraus blockiert sind. */
-if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
-}
-
-/* ---------- Format-Registry ---------- */
-const IMAGE_DECODE = ["jpg", "jpeg", "png", "webp", "gif", "bmp"];
-// Der Browser kann nur diese Bildformate kodieren:
-const IMAGE_ENCODE = ["png", "jpg", "webp"];
-const DATA_FORMATS = ["csv", "xlsx", "json"];
-
-function extOf(name) {
-  const e = name.split(".").pop().toLowerCase();
-  return e === "jpeg" ? "jpg" : e;
-}
-
-function targetsFor(ext) {
-  if (ext === "pdf") return ["pptx", "jpg", "png", "txt"];
-  if (ext === "pptx") return ["pdf", "txt"];
-  if (ext === "docx") return ["pdf", "txt"];
-  if (ext === "txt") return ["pdf", "csv"];
-  if (IMAGE_DECODE.includes(ext)) {
-    return IMAGE_ENCODE.filter(t => t !== ext).concat(["pdf"]);
-  }
-  if (DATA_FORMATS.includes(ext)) {
-    return DATA_FORMATS.filter(t => t !== ext);
-  }
-  return [];
-}
-
-const MIME = {
-  png: "image/png", jpg: "image/jpeg", webp: "image/webp",
-  pdf: "application/pdf", csv: "text/csv", json: "application/json",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  txt: "text/plain", zip: "application/zip",
-};
-
-/* ---------- UI-Elemente ---------- */
-const dropzone = document.getElementById("dropzone");
-const fileinput = document.getElementById("fileinput");
-const fileinfo = document.getElementById("fileinfo");
-const fnameEl = document.getElementById("fname");
-const fmetaEl = document.getElementById("fmeta");
-const targetSel = document.getElementById("target");
-const convertBtn = document.getElementById("convertbtn");
-const msgEl = document.getElementById("msg");
-const spinner = document.getElementById("spinner");
-
-let currentFile = null;
-
-function showMsg(text, type) {
-  msgEl.textContent = text;
-  msgEl.className = "msg show " + type;
-}
-function clearMsg() { msgEl.className = "msg"; }
-
-function fmtSize(n) {
-  if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
-  if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
-  return n + " Bytes";
-}
-
-/* ---------- Dateiauswahl ---------- */
-dropzone.addEventListener("click", () => fileinput.click());
-dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("drag"); });
-dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
-dropzone.addEventListener("drop", e => {
-  e.preventDefault(); dropzone.classList.remove("drag");
-  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-});
-fileinput.addEventListener("change", () => {
-  if (fileinput.files.length) handleFile(fileinput.files[0]);
-});
-
-function handleFile(file) {
-  clearMsg();
-  const ext = extOf(file.name);
-  const targets = targetsFor(ext);
-  if (!targets.length) {
-    fileinfo.classList.remove("show");
-    showMsg(`Das Format .${ext} wird in der App nicht unterstützt. ` +
-            `Audio/Video wandelt die Desktop-Version um.`, "error");
-    return;
-  }
-  currentFile = file;
-  fnameEl.textContent = file.name;
-  fmetaEl.textContent = `.${ext} · ${fmtSize(file.size)}`;
-  targetSel.innerHTML = "";
-  for (const t of targets) {
-    const o = document.createElement("option");
-    o.value = t; o.textContent = "." + t;
-    targetSel.appendChild(o);
-  }
-  fileinfo.classList.add("show");
-}
-
-/* ---------- Konvertierung ---------- */
-convertBtn.addEventListener("click", async () => {
-  if (!currentFile) return;
-  clearMsg();
-  convertBtn.disabled = true;
-  spinner.classList.add("show");
-  const src = extOf(currentFile.name);
-  const dst = targetSel.value;
-  const base = currentFile.name.replace(/\.[^.]+$/, "");
-  try {
-    const result = await convert(currentFile, src, dst, base);
-    await deliver(result.blob, result.name, MIME[extOf(result.name)] || "application/octet-stream");
-    showMsg(`✅ Fertig! ${result.name} (${fmtSize(result.blob.size)}) wurde gespeichert.`, "success");
-  } catch (err) {
-    showMsg("❌ " + (err && err.message ? err.message : "Konvertierung fehlgeschlagen."), "error");
-  } finally {
-    convertBtn.disabled = false;
-    spinner.classList.remove("show");
-  }
-});
-
-/** Liefert { blob, name } – name kann vom Standard abweichen (z.B. ZIP bei mehreren Seiten). */
-async function convert(file, src, dst, base) {
-  const def = { name: base + "." + dst };
-  if (src === "pdf") {
-    if (dst === "pptx") return { ...def, blob: await pdfToPptx(file) };
-    if (dst === "txt") return { ...def, blob: await pdfToTxt(file) };
-    if (dst === "jpg" || dst === "png") return pdfToImages(file, dst, base);
-  }
-  if (src === "pptx") {
-    if (dst === "pdf") return { ...def, blob: await pptxToPdf(file) };
-    if (dst === "txt") return { ...def, blob: await pptxToTxt(file) };
-  }
-  if (src === "docx") {
-    if (dst === "pdf") return { ...def, blob: await textToPdfBlob(await docxToText(file)) };
-    if (dst === "txt") return { ...def, blob: new Blob([await docxToText(file)], { type: "text/plain" }) };
-  }
-  if (src === "txt") {
-    if (dst === "pdf") return { ...def, blob: await textToPdfBlob(await file.text()) };
-    if (dst === "csv") return { ...def, blob: new Blob([await file.text()], { type: "text/csv" }) };
-  }
-  if (IMAGE_DECODE.includes(src)) {
-    if (dst === "pdf") return { ...def, blob: await imageToPdf(file) };
-    return { ...def, blob: await imageToImage(file, dst) };
-  }
-  if (DATA_FORMATS.includes(src)) return { ...def, blob: await dataConvert(file, src, dst) };
-  throw new Error(`Umwandlung .${src} → .${dst} wird nicht unterstützt.`);
-}
-
-/* ================= PDF (pdf.js) ================= */
-
-async function openPdf(file) {
-  if (!window.pdfjsLib) throw new Error("Die PDF-Engine konnte nicht geladen werden.");
-  try {
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-    if (doc.numPages < 1) throw new Error("leer");
-    return doc;
-  } catch (e) {
-    if (e && e.name === "PasswordException") {
-      throw new Error("Dieses PDF ist passwortgeschützt und kann nicht umgewandelt werden.");
-    }
-    throw new Error("Das PDF konnte nicht gelesen werden. Ist die Datei beschädigt?");
-  }
-}
-
-async function renderPdfPage(doc, pageNum, maxWidth) {
-  const page = await doc.getPage(pageNum);
-  const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(2.5, Math.max(1, maxWidth / base.width));
-  const vp = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(vp.width);
-  canvas.height = Math.round(vp.height);
-  await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
-  return canvas;
-}
-
-/** Jede PDF-Seite wird als bildschirmfüllendes Bild auf eine Folie gelegt. */
-async function pdfToPptx(file) {
-  const doc = await openPdf(file);
-  if (doc.numPages > 200) {
-    throw new Error(`Das PDF hat ${doc.numPages} Seiten – bitte maximal 200.`);
-  }
-  const first = await doc.getPage(1);
-  const vp1 = first.getViewport({ scale: 1 });
-  const wIn = 10;
-  const hIn = Math.max(3, Math.min(20, wIn * vp1.height / vp1.width));
-
-  const pptx = new PptxGenJS();
-  pptx.defineLayout({ name: "PDFSEITE", width: wIn, height: hIn });
-  pptx.layout = "PDFSEITE";
-
-  for (let i = 1; i <= doc.numPages; i++) {
-    const canvas = await renderPdfPage(doc, i, 1600);
-    const slide = pptx.addSlide();
-    slide.addImage({
-      data: canvas.toDataURL("image/jpeg", 0.9),
-      x: 0, y: 0, w: wIn, h: hIn,
-    });
-  }
-  return await pptx.write("blob");
-}
-
-async function pdfToTxt(file) {
-  const doc = await openPdf(file);
-  const parts = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    parts.push(content.items.map(it => it.str).join(" "));
-  }
-  const text = parts.join("\n\n").trim();
-  if (!text) {
-    throw new Error("In diesem PDF wurde kein Text gefunden. " +
-                    "Gescannte PDFs (nur Bilder) benötigen eine OCR-Software.");
-  }
-  return new Blob([text], { type: "text/plain" });
-}
-
-/** Eine Seite → einzelnes Bild; mehrere Seiten → ZIP mit allen Seitenbildern. */
-async function pdfToImages(file, dst, base) {
-  const doc = await openPdf(file);
-  if (doc.numPages > 200) {
-    throw new Error(`Das PDF hat ${doc.numPages} Seiten – bitte maximal 200.`);
-  }
-  const blobs = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const canvas = await renderPdfPage(doc, i, 2000);
-    const blob = await new Promise(res =>
-      canvas.toBlob(res, MIME[dst], dst === "png" ? undefined : 0.92));
-    if (!blob) throw new Error(`Seite ${i} konnte nicht als .${dst} gespeichert werden.`);
-    blobs.push(blob);
-  }
-  if (blobs.length === 1) {
-    return { blob: blobs[0], name: `${base}.${dst}` };
-  }
-  const zip = new JSZip();
-  for (let i = 0; i < blobs.length; i++) {
-    zip.file(`${base}_Seite_${String(i + 1).padStart(3, "0")}.${dst}`, blobs[i]);
-  }
-  const zipBlob = await zip.generateAsync({ type: "blob" });
-  return { blob: zipBlob, name: `${base}_Seiten.zip` };
-}
-
-/* ================= PPTX ================= */
-
-async function openPptx(file) {
-  let zip;
-  try {
-    zip = await JSZip.loadAsync(await file.arrayBuffer());
-  } catch {
-    throw new Error("Die PPTX-Datei konnte nicht gelesen werden. Ist sie beschädigt?");
-  }
-  const slideNames = Object.keys(zip.files)
-    .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
-    .sort((a, b) => parseInt(a.match(/\d+/g).pop()) - parseInt(b.match(/\d+/g).pop()));
-  if (!slideNames.length) {
-    throw new Error("In der Datei wurden keine Folien gefunden. Ist es wirklich eine PPTX?");
-  }
-  return { zip, slideNames };
-}
-
-/** Extrahiert Absatz-Texte einer Folien-XML. */
-function slideParagraphs(xmlText) {
-  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
-  const paragraphs = [];
-  const pNodes = xml.getElementsByTagName("a:p");
-  for (const p of pNodes) {
-    const runs = p.getElementsByTagName("a:t");
-    const line = Array.from(runs).map(t => t.textContent).join("");
-    if (line.trim()) paragraphs.push(line.trim());
-  }
-  return paragraphs;
-}
-
-/** Bilder (PNG/JPG) einer Folie über deren Rels-Datei finden. */
-async function slideImages(zip, slideName) {
-  const relsName = slideName.replace("slides/", "slides/_rels/") + ".rels";
-  const relsFile = zip.file(relsName);
-  if (!relsFile) return [];
-  const xml = new DOMParser().parseFromString(await relsFile.async("text"), "application/xml");
-  const images = [];
-  for (const rel of xml.getElementsByTagName("Relationship")) {
-    const type = rel.getAttribute("Type") || "";
-    if (!type.endsWith("/image")) continue;
-    const target = (rel.getAttribute("Target") || "").replace("../", "ppt/");
-    if (!/\.(png|jpe?g)$/i.test(target)) continue; // andere Formate kann jsPDF nicht
-    const f = zip.file(target);
-    if (f) images.push({ data: await f.async("blob") });
-  }
-  return images;
-}
-
-function loadBlobAsImage(blob) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Bild unlesbar")); };
-    img.src = url;
-  });
-}
-
-/** Vereinfachte Umwandlung: Texte + eingebettete Bilder je Folie auf eine PDF-Seite. */
-async function pptxToPdf(file) {
-  const { zip, slideNames } = await openPptx(file);
-  const pdf = new jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
-  const pageW = 297, pageH = 210, margin = 16, maxW = pageW - 2 * margin;
-
-  for (let s = 0; s < slideNames.length; s++) {
-    if (s > 0) pdf.addPage();
-    let y = margin;
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(150);
-    pdf.text(`Folie ${s + 1}`, pageW - margin, 10, { align: "right" });
-    pdf.setTextColor(0);
-
-    const paragraphs = slideParagraphs(await zip.file(slideNames[s]).async("text"));
-    pdf.setFontSize(paragraphs.length ? 20 : 12);
-    for (let i = 0; i < paragraphs.length; i++) {
-      pdf.setFont("helvetica", i === 0 ? "bold" : "normal");
-      pdf.setFontSize(i === 0 ? 20 : 13);
-      const lines = pdf.splitTextToSize((i === 0 ? "" : "• ") + paragraphs[i], maxW);
-      for (const line of lines) {
-        if (y > pageH - margin) { pdf.addPage(); y = margin; }
-        pdf.text(line, margin, y);
-        y += i === 0 ? 9 : 6.5;
-      }
-      if (i === 0) y += 3;
-    }
-
-    for (const im of await slideImages(zip, slideNames[s])) {
-      let img;
-      try { img = await loadBlobAsImage(im.data); } catch { continue; }
-      const scale = Math.min(maxW / img.naturalWidth, 110 / img.naturalHeight, 0.35);
-      const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
-      if (y + h > pageH - margin) { pdf.addPage(); y = margin; }
-      try {
-        // Über Canvas zu JPEG: jsPDF kommt mit rohen <img>-Elementen nicht
-        // zuverlässig klar (u.a. bei PNG mit Transparenz)
-        const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-        const c = canvas.getContext("2d");
-        c.fillStyle = "#fff";
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        c.drawImage(img, 0, 0);
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", margin, y, w, h);
-        y += h + 6;
-      } catch { /* einzelnes defektes Bild überspringen */ }
-    }
-  }
-  return pdf.output("blob");
-}
-
-async function pptxToTxt(file) {
-  const { zip, slideNames } = await openPptx(file);
-  const parts = [];
-  for (let s = 0; s < slideNames.length; s++) {
-    const paragraphs = slideParagraphs(await zip.file(slideNames[s]).async("text"));
-    parts.push(`=== Folie ${s + 1} ===\n` + paragraphs.join("\n"));
-  }
-  return new Blob([parts.join("\n\n")], { type: "text/plain" });
-}
-
-/* ================= DOCX ================= */
-
-async function docxToText(file) {
-  let zip;
-  try {
-    zip = await JSZip.loadAsync(await file.arrayBuffer());
-  } catch {
-    throw new Error("Die DOCX-Datei konnte nicht gelesen werden. Ist sie beschädigt?");
-  }
-  const docFile = zip.file("word/document.xml");
-  if (!docFile) throw new Error("Kein Word-Dokument gefunden. Ist es wirklich eine DOCX?");
-  const xml = new DOMParser().parseFromString(await docFile.async("text"), "application/xml");
-  const lines = [];
-  for (const p of xml.getElementsByTagName("w:p")) {
-    const runs = p.getElementsByTagName("w:t");
-    lines.push(Array.from(runs).map(t => t.textContent).join(""));
-  }
-  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (!text) throw new Error("Das Dokument enthält keinen Text.");
-  return text;
-}
-
-/* ================= Text → PDF ================= */
-
-async function textToPdfBlob(text) {
-  const pdf = new jspdf.jsPDF({ unit: "mm", format: "a4" });
-  pdf.setFont("helvetica"); pdf.setFontSize(11);
-  const lines = pdf.splitTextToSize(text, 180);
-  let y = 15;
-  for (const line of lines) {
-    if (y > 282) { pdf.addPage(); y = 15; }
-    pdf.text(line, 15, y);
-    y += 5.5;
-  }
-  return pdf.output("blob");
-}
-
-/* ================= Bilder ================= */
-
-async function loadImage(file) {
-  try {
-    return await createImageBitmap(file);
-  } catch {
-    throw new Error("Die Datei konnte nicht als Bild gelesen werden. Ist sie beschädigt?");
-  }
-}
-
-async function imageToImage(file, dst) {
-  const img = await loadImage(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width; canvas.height = img.height;
-  const ctx = canvas.getContext("2d");
-  if (dst === "jpg") { // JPG kennt keine Transparenz: weißer Hintergrund
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  ctx.drawImage(img, 0, 0);
-  const blob = await new Promise(res =>
-    canvas.toBlob(res, MIME[dst], dst === "png" ? undefined : 0.92));
-  if (!blob) throw new Error(`Das Gerät unterstützt die Ausgabe als .${dst} nicht.`);
-  return blob;
-}
-
-async function imageToPdf(file) {
-  const img = await loadImage(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width; canvas.height = img.height;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-  const landscape = img.width > img.height;
-  const pdf = new jspdf.jsPDF({ orientation: landscape ? "l" : "p", unit: "mm", format: "a4" });
-  const pw = pdf.internal.pageSize.getWidth() - 20;
-  const ph = pdf.internal.pageSize.getHeight() - 20;
-  const scale = Math.min(pw / img.width, ph / img.height);
-  const w = img.width * scale, h = img.height * scale;
-  pdf.addImage(dataUrl, "JPEG", (pw + 20 - w) / 2, (ph + 20 - h) / 2, w, h);
-  return pdf.output("blob");
-}
-
-/* ================= Daten (SheetJS) ================= */
-
-async function dataConvert(file, src, dst) {
-  let workbook;
-  try {
-    if (src === "json") {
-      const parsed = JSON.parse(await file.text());
-      const rows = Array.isArray(parsed) ? parsed : [parsed];
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, "Daten");
-    } else {
-      workbook = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false });
-    }
-  } catch {
-    throw new Error(`Die .${src}-Datei konnte nicht gelesen werden. Ist sie beschädigt?`);
-  }
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) throw new Error("Die Datei enthält keine lesbaren Daten.");
-
-  if (dst === "csv") {
-    return new Blob(["﻿" + XLSX.utils.sheet_to_csv(sheet)], { type: "text/csv" });
-  }
-  if (dst === "json") {
-    const rows = XLSX.utils.sheet_to_json(sheet);
-    return new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
-  }
-  if (dst === "xlsx") {
-    const out = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-    return new Blob([out], { type: MIME.xlsx });
-  }
-  throw new Error(`Unbekanntes Zielformat: .${dst}`);
-}
-
-/* ---------- Speichern: Android-Bridge oder Browser-Download ---------- */
-async function deliver(blob, name, mime) {
-  if (window.Android && window.Android.saveFile) {
-    const buf = await blob.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let bin = "";
-    const CHUNK = 32768;
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-    }
-    window.Android.saveFile(btoa(bin), name, mime);
-    return;
-  }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-</script>
+<script src="js/convert.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

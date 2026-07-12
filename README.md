@@ -90,18 +90,24 @@ Die fertige App liegt unter [`android/UniversalConverter.apk`](android/Universal
 3. App öffnen, Datei wählen, Zielformat wählen, konvertieren. Das Ergebnis
    wird über den „Speichern unter"-Dialog z.B. im Downloads-Ordner abgelegt.
 
-Die App arbeitet **komplett offline** und unterstützt:
+Die App arbeitet **komplett offline** und erkennt **148 Dateitypen mit
+über 900 Umwandlungswegen**. Eine eingebaute **Format-Suche** zeigt zu
+jedem Format sofort, was möglich ist.
 
-- **PDF** → PPTX (jede Seite als originalgetreues Folienbild), JPG, PNG
-  (bei mehreren Seiten als ZIP), TXT
-- **PPTX** → PDF, TXT (Texte + eingebettete Bilder, vereinfachtes Layout)
-- **DOCX** → PDF, TXT
-- **Bilder** (JPG/PNG/WEBP/GIF/BMP) → JPG/PNG/WEBP/PDF
-- **Daten**: CSV ↔ XLSX ↔ JSON
-- **TXT** → PDF, CSV
-
-Nur Audio und Video übernimmt die Desktop-Version (dafür wird ffmpeg
-benötigt, das auf Handys nicht verfügbar ist).
+- **Dokumente**: PDF ↔ PPTX · PDF → JPG/PNG (mehrseitig als ZIP), TXT,
+  HTML · DOCX, ODT, ODP, EPUB, RTF → PDF, TXT, HTML, DOCX, EPUB
+- **Text & Code**: 80+ Formate (Markdown, HTML, JSON, YAML, XML, TOML,
+  SRT/VTT-Untertitel, Jupyter-Notebooks, Quellcode aller gängigen
+  Sprachen, Logs, Configs …) → PDF, HTML, DOCX, EPUB, TXT; dazu
+  MD ↔ HTML, JSON ↔ YAML/XML, SRT ↔ VTT, IPYNB → PY
+- **Tabellen**: CSV, TSV, XLSX, XLS, XLSB, ODS, DIF, SLK, PRN, DBF
+  untereinander + JSON, HTML, PDF
+- **Bilder**: JPG, PNG, WEBP, GIF, BMP, TIFF, SVG, ICO, AVIF →
+  PNG, JPG, WEBP, BMP, GIF, TIFF, ICO, PDF
+- **Audio**: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS → MP3, WAV
+- **Video**: MP4, WEBM, MOV, MKV → Standbild (PNG/JPG) + Tonspur (MP3/WAV)
+- **Unbekannte Endungen**: Sieht der Inhalt wie Text aus, werden
+  automatisch die Text-Umwandlungen angeboten.
 
 ### Web-Version
 
