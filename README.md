@@ -90,10 +90,18 @@ Die fertige App liegt unter [`android/UniversalConverter.apk`](android/Universal
 3. App öffnen, Datei wählen, Zielformat wählen, konvertieren. Das Ergebnis
    wird über den „Speichern unter"-Dialog z.B. im Downloads-Ordner abgelegt.
 
-Die App unterstützt: **Bilder** (JPG/PNG/WEBP/GIF/BMP → JPG/PNG/WEBP/PDF),
-**Daten** (CSV ↔ XLSX ↔ JSON) und **TXT → PDF**. Audio, Video und
-DOCX/PDF-Dokumente übernimmt die Desktop-Version (dafür wird ffmpeg bzw.
-LibreOffice benötigt, das auf Handys nicht verfügbar ist).
+Die App arbeitet **komplett offline** und unterstützt:
+
+- **PDF** → PPTX (jede Seite als originalgetreues Folienbild), JPG, PNG
+  (bei mehreren Seiten als ZIP), TXT
+- **PPTX** → PDF, TXT (Texte + eingebettete Bilder, vereinfachtes Layout)
+- **DOCX** → PDF, TXT
+- **Bilder** (JPG/PNG/WEBP/GIF/BMP) → JPG/PNG/WEBP/PDF
+- **Daten**: CSV ↔ XLSX ↔ JSON
+- **TXT** → PDF, CSV
+
+Nur Audio und Video übernimmt die Desktop-Version (dafür wird ffmpeg
+benötigt, das auf Handys nicht verfügbar ist).
 
 ### Web-Version
 
