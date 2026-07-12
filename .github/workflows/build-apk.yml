@@ -1,0 +1,50 @@
+name: APK bauen
+
+on:
+  push:
+    branches:
+      - main
+      - claude/todo-app-shake-gestures-s0m9by
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: APK bauen
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: APK umbenennen
+        run: cp app/build/outputs/apk/release/app-release.apk MeineTodos.apk
+
+      - name: Release mit APK veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: "Meine Todos – APK Download"
+          body: |
+            📱 **Meine Todos** – Interaktive Todo-App
+
+            ⬇️ Einfach `MeineTodos.apk` unten herunterladen und installieren.
+            (Beim Installieren ggf. "Unbekannte Quellen zulassen" bestätigen.)
+
+            Funktionen:
+            - 📳 Schütteln = letzte Aktion rückgängig
+            - 👉 Wischen nach rechts = erledigt, nach links = löschen
+            - 🕘 Verlauf aller Aktionen
+            - 📊 Statistiken, 🌙 Dunkelmodus, 🎉 Konfetti
+          files: MeineTodos.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

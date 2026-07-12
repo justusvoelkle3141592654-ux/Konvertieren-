@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Meine Todos</title>
+<style>
+  :root {
+    --primary: #6C5CE7;
+    --primary-dark: #5A4BD1;
+    --accent: #00CEC9;
+    --danger: #FF6B6B;
+    --success: #2ECC71;
+    --warn: #FDCB6E;
+    --bg: #F4F5FB;
+    --card: #FFFFFF;
+    --text: #2D3436;
+    --text-soft: #8A8FA3;
+    --shadow: 0 4px 16px rgba(45,52,84,.10);
+    --radius: 18px;
+  }
+  body.dark {
+    --bg: #171923;
+    --card: #232636;
+    --text: #EDEFF7;
+    --text-soft: #8A90AB;
+    --shadow: 0 4px 16px rgba(0,0,0,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overscroll-behavior:none; }
+  body {
+    font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    transition: background .35s, color .35s;
+    user-select: none; -webkit-user-select: none;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    background: linear-gradient(135deg, var(--primary), #8E7CF3);
+    color:#fff; padding: 22px 20px 60px;
+    border-radius: 0 0 32px 32px;
+    position: relative;
+  }
+  header .top { display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:1.55rem; font-weight:700; }
+  header .date { opacity:.85; font-size:.85rem; margin-top:4px; }
+  .menu-btn {
+    width:44px; height:44px; border:none; border-radius:14px;
+    background:rgba(255,255,255,.2); color:#fff; font-size:1.3rem;
+    display:flex; align-items:center; justify-content:center;
+    transition: transform .2s, background .2s;
+  }
+  .menu-btn:active { transform:scale(.88); background:rgba(255,255,255,.35); }
+
+  .progress-wrap { margin-top:18px; }
+  .progress-label { display:flex; justify-content:space-between; font-size:.8rem; opacity:.9; margin-bottom:6px; }
+  .progress-bar { height:10px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; }
+  .progress-fill {
+    height:100%; width:0%; border-radius:99px;
+    background: linear-gradient(90deg, #00CEC9, #55EFC4);
+    transition: width .6s cubic-bezier(.22,1,.36,1);
+  }
+
+  /* ---------- Eingabe ---------- */
+  .input-card {
+    margin: -34px 16px 0; background: var(--card); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 12px; display:flex; gap:8px; align-items:center;
+    position:relative; z-index:2; transition: background .35s;
+  }
+  .input-card input {
+    flex:1; border:none; outline:none; background:transparent;
+    font-size:1rem; color:var(--text); padding:10px 6px; user-select:text; -webkit-user-select:text;
+  }
+  .input-card input::placeholder { color: var(--text-soft); }
+  .prio-btn {
+    width:40px; height:40px; border:none; border-radius:12px; font-size:1.05rem;
+    background: var(--bg); transition: transform .15s;
+  }
+  .prio-btn:active { transform:scale(.85); }
+  .add-btn {
+    width:46px; height:46px; border:none; border-radius:14px;
+    background: linear-gradient(135deg, var(--primary), #8E7CF3);
+    color:#fff; font-size:1.6rem; line-height:1;
+    box-shadow: 0 4px 12px rgba(108,92,231,.4);
+    transition: transform .2s;
+  }
+  .add-btn:active { transform:scale(.85) rotate(90deg); }
+
+  /* ---------- Filter ---------- */
+  .filters { display:flex; gap:8px; padding:16px; }
+  .chip {
+    border:none; padding:8px 16px; border-radius:99px; font-size:.83rem; font-weight:600;
+    background:var(--card); color:var(--text-soft); box-shadow:var(--shadow);
+    transition: all .25s;
+  }
+  .chip.active { background:var(--primary); color:#fff; transform:translateY(-2px); }
+
+  /* ---------- Liste ---------- */
+  #list { padding: 0 16px 140px; }
+  .task {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    margin-bottom:12px; display:flex; align-items:center; gap:12px; padding:14px;
+    position:relative; overflow:hidden;
+    animation: slideIn .35s cubic-bezier(.22,1,.36,1);
+    transition: transform .25s, opacity .25s, background .35s;
+    touch-action: pan-y;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateY(18px) scale(.97);} to { opacity:1; transform:none;} }
+  .task.removing { transform: translateX(110%) !important; opacity:0; }
+  .task.removing-left { transform: translateX(-110%) !important; opacity:0; }
+
+  .check {
+    min-width:28px; height:28px; border-radius:50%;
+    border:2.5px solid var(--text-soft); display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:.9rem; transition: all .25s;
+  }
+  .task.done .check { background:var(--success); border-color:var(--success); animation:pop .35s; }
+  @keyframes pop { 50% { transform:scale(1.35);} }
+
+  .task .body { flex:1; min-width:0; }
+  .task .title { font-size:.98rem; font-weight:600; word-wrap:break-word; transition: color .25s; }
+  .task.done .title { text-decoration: line-through; color: var(--text-soft); }
+  .task .meta { font-size:.72rem; color:var(--text-soft); margin-top:3px; }
+  .prio-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+
+  .empty {
+    text-align:center; color:var(--text-soft); padding:48px 24px; font-size:.95rem;
+    animation: slideIn .4s;
+  }
+  .empty .big { font-size:3rem; margin-bottom:12px; }
+
+  /* ---------- Snackbar ---------- */
+  #snackbar {
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(120px);
+    background:#2D3436; color:#fff; padding:13px 22px; border-radius:14px;
+    font-size:.88rem; box-shadow:0 8px 24px rgba(0,0,0,.3);
+    transition: transform .35s cubic-bezier(.22,1,.36,1); z-index:60;
+    max-width:88vw; text-align:center;
+  }
+  #snackbar.show { transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Drawer / Menü ---------- */
+  #overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none;
+    transition:opacity .3s; z-index:80;
+  }
+  #overlay.show { opacity:1; pointer-events:auto; }
+  #drawer {
+    position:fixed; top:0; right:-85vw; width:82vw; max-width:340px; height:100%;
+    background:var(--card); z-index:90; box-shadow:-8px 0 32px rgba(0,0,0,.2);
+    transition: right .35s cubic-bezier(.22,1,.36,1), background .35s;
+    display:flex; flex-direction:column; border-radius: 24px 0 0 24px;
+  }
+  #drawer.show { right:0; }
+  #drawer .d-head {
+    background:linear-gradient(135deg, var(--primary), #8E7CF3); color:#fff;
+    padding:24px 20px; border-radius:24px 0 0 0;
+  }
+  #drawer .d-head h2 { font-size:1.2rem; }
+  #drawer .d-head p { font-size:.8rem; opacity:.85; margin-top:4px; }
+  .d-tabs { display:flex; border-bottom:1px solid rgba(128,128,160,.15); }
+  .d-tab {
+    flex:1; border:none; background:none; padding:14px 0; font-size:.85rem; font-weight:600;
+    color:var(--text-soft); border-bottom:3px solid transparent; transition:all .25s;
+  }
+  .d-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+  .d-content { flex:1; overflow-y:auto; padding:16px; }
+
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .stat {
+    background:var(--bg); border-radius:14px; padding:16px; text-align:center;
+    animation: slideIn .3s;
+  }
+  .stat .num { font-size:1.6rem; font-weight:700; color:var(--primary); }
+  .stat .lbl { font-size:.72rem; color:var(--text-soft); margin-top:4px; }
+
+  .hist-item {
+    display:flex; gap:10px; padding:10px 4px; border-bottom:1px solid rgba(128,128,160,.12);
+    font-size:.83rem; animation: slideIn .25s;
+  }
+  .hist-item .ico { font-size:1rem; }
+  .hist-item .what { flex:1; }
+  .hist-item .when { color:var(--text-soft); font-size:.7rem; white-space:nowrap; }
+
+  .d-action {
+    width:100%; border:none; background:var(--bg); color:var(--text);
+    padding:14px; border-radius:14px; font-size:.9rem; font-weight:600;
+    margin-bottom:10px; display:flex; align-items:center; gap:10px;
+    transition: transform .15s;
+  }
+  .d-action:active { transform:scale(.97); }
+  .d-action.red { color:var(--danger); }
+
+  /* ---------- Konfetti ---------- */
+  .confetti {
+    position:fixed; width:9px; height:9px; top:-12px; z-index:100; pointer-events:none;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    to { transform: translateY(105vh) rotate(720deg); opacity:.4; }
+  }
+
+  /* ---------- Shake-Hinweis ---------- */
+  .hint {
+    text-align:center; font-size:.75rem; color:var(--text-soft);
+    padding:4px 16px 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <div>
+      <h1 id="greeting">Meine Todos ✨</h1>
+      <div class="date" id="dateLabel"></div>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Menü">☰</button>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-label"><span id="progText">0 von 0 erledigt</span><span id="progPct">0%</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+  </div>
+</header>
+
+<div class="input-card">
+  <button class="prio-btn" id="prioBtn" title="Priorität">🟢</button>
+  <input id="input" type="text" placeholder="Was steht an?" maxlength="120" enterkeyhint="done">
+  <button class="add-btn" id="addBtn">+</button>
+</div>
+
+<div class="filters">
+  <button class="chip active" data-f="alle">Alle</button>
+  <button class="chip" data-f="offen">Offen</button>
+  <button class="chip" data-f="erledigt">Erledigt</button>
+</div>
+
+<div id="list"></div>
+<div class="hint">📳 Schüttle dein Handy, um die letzte Aktion rückgängig zu machen · Wische Aufgaben nach links/rechts</div>
+
+<div id="snackbar"></div>
+
+<div id="overlay"></div>
+<aside id="drawer">
+  <div class="d-head">
+    <h2>Menü</h2>
+    <p>Verlauf, Statistiken &amp; mehr</p>
+  </div>
+  <div class="d-tabs">
+    <button class="d-tab active" data-t="verlauf">🕘 Verlauf</button>
+    <button class="d-tab" data-t="statistik">📊 Statistik</button>
+    <button class="d-tab" data-t="mehr">⚙️ Mehr</button>
+  </div>
+  <div class="d-content" id="dContent"></div>
+</aside>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- Zustand ---------- */
+  const PRIOS = [
+    { icon:'🟢', name:'Niedrig', color:'#2ECC71' },
+    { icon:'🟡', name:'Mittel',  color:'#FDCB6E' },
+    { icon:'🔴', name:'Hoch',    color:'#FF6B6B' }
+  ];
+  let tasks   = load('todos', []);
+  let history = load('verlauf', []);
+  let undoStack = [];            // Aktionen für Schüttel-Undo (nur Sitzung)
+  let filter  = 'alle';
+  let prio    = 0;
+  let dark    = load('dark', false);
+  let drawerTab = 'verlauf';
+
+  function load(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } }
+  function save(){ localStorage.setItem('todos', JSON.stringify(tasks));
+                   localStorage.setItem('verlauf', JSON.stringify(history.slice(0,100)));
+                   localStorage.setItem('dark', JSON.stringify(dark)); }
+  function vibrate(ms){ try { if (window.Android) Android.vibrate(ms); else if (navigator.vibrate) navigator.vibrate(ms); } catch(e){} }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function esc(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  /* ---------- Verlauf ---------- */
+  function logHistory(icon, text){
+    history.unshift({ icon, text, ts: Date.now() });
+    save();
+    if (drawerEl.classList.contains('show') && drawerTab === 'verlauf') renderDrawer();
+  }
+  function timeAgo(ts){
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return 'gerade eben';
+    if (s < 3600) return `vor ${Math.floor(s/60)} Min.`;
+    if (s < 86400) return `vor ${Math.floor(s/3600)} Std.`;
+    return new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
+  }
+
+  /* ---------- Snackbar ---------- */
+  let snackTimer;
+  function snack(msg){
+    const el = document.getElementById('snackbar');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(snackTimer);
+    snackTimer = setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
+  /* ---------- Konfetti ---------- */
+  function confetti(){
+    const colors = ['#6C5CE7','#00CEC9','#FDCB6E','#FF6B6B','#2ECC71','#8E7CF3'];
+    for (let i = 0; i < 34; i++){
+      const c = document.createElement('div');
+      c.className = 'confetti';
+      c.style.left = Math.random()*100 + 'vw';
+      c.style.background = colors[Math.floor(Math.random()*colors.length)];
+      c.style.animationDuration = (1.4 + Math.random()*1.4) + 's';
+      c.style.animationDelay = (Math.random()*.3) + 's';
+      c.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 3200);
+    }
+  }
+
+  /* ---------- Aktionen ---------- */
+  function addTask(){
+    const inp = document.getElementById('input');
+    const text = inp.value.trim();
+    if (!text){ vibrate(60); inp.focus(); return; }
+    const t = { id: uid(), text, done:false, prio, created: Date.now() };
+    tasks.unshift(t);
+    undoStack.push({ type:'add', task:{...t} });
+    logHistory('➕', `„${text}“ hinzugefügt`);
+    inp.value = '';
+    vibrate(25);
+    save(); render();
+  }
+
+  function toggleTask(id){
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    t.done = !t.done;
+    undoStack.push({ type:'toggle', id });
+    logHistory(t.done ? '✅' : '↩️', `„${t.text}“ ${t.done ? 'erledigt' : 'wieder geöffnet'}`);
+    vibrate(30);
+    if (t.done){
+      confetti();
+      if (tasks.length && tasks.every(x => x.done)) setTimeout(() => snack('🎉 Alles erledigt – stark!'), 400);
+    }
+    save(); render();
+  }
+
+  function deleteTask(id, dirLeft){
+    const idx = tasks.findIndex(t => t.id === id);
+    if (idx < 0) return;
+    const t = tasks[idx];
+    const el = document.querySelector(`[data-id="${id}"]`);
+    undoStack.push({ type:'delete', task:{...t}, index: idx });
+    logHistory('🗑️', `„${t.text}“ gelöscht`);
+    vibrate(40);
+    if (el){
+      el.classList.add(dirLeft ? 'removing-left' : 'removing');
+      setTimeout(() => { tasks.splice(tasks.findIndex(x => x.id === id), 1); save(); render(); }, 260);
+    } else {
+      tasks.splice(idx, 1); save(); render();
+    }
+    snack('Gelöscht – schütteln zum Rückgängigmachen 📳');
+  }
+
+  function editTask(id){
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    const neu = prompt('Aufgabe bearbeiten:', t.text);
+    if (neu === null) return;
+    const text = neu.trim();
+    if (!text || text === t.text) return;
+    undoStack.push({ type:'edit', id, oldText: t.text });
+    logHistory('✏️', `„${t.text}“ → „${text}“`);
+    t.text = text;
+    vibrate(25);
+    save(); render();
+  }
+
+  /* ---------- Schüttel-Undo ---------- */
+  window.onShake = function(){
+    vibrate(80);
+    const a = undoStack.pop();
+    if (!a){ snack('Nichts zum Rückgängigmachen 🤷'); return; }
+    if (a.type === 'add'){
+      tasks = tasks.filter(t => t.id !== a.task.id);
+      snack(`Rückgängig: „${a.task.text}“ entfernt`);
+    } else if (a.type === 'delete'){
+      tasks.splice(Math.min(a.index, tasks.length), 0, a.task);
+      snack(`Rückgängig: „${a.task.text}“ wiederhergestellt`);
+    } else if (a.type === 'toggle'){
+      const t = tasks.find(t => t.id === a.id);
+      if (t){ t.done = !t.done; snack(`Rückgängig: „${t.text}“`); }
+    } else if (a.type === 'edit'){
+      const t = tasks.find(t => t.id === a.id);
+      if (t){ t.text = a.oldText; snack(`Rückgängig: Text wiederhergestellt`); }
+    }
+    logHistory('📳', 'Aktion per Schütteln rückgängig gemacht');
+    save(); render();
+  };
+
+  /* Fallback: Schüttel-Erkennung über den Browser-Sensor (falls keine native Brücke) */
+  if (!window.Android && window.DeviceMotionEvent){
+    let last = 0;
+    window.addEventListener('devicemotion', e => {
+      const g = e.accelerationIncludingGravity;
+      if (!g) return;
+      const force = Math.sqrt(g.x*g.x + g.y*g.y + g.z*g.z) / 9.81;
+      if (force > 2.6 && Date.now() - last > 1000){
+        last = Date.now();
+        window.onShake();
+      }
+    });
+  }
+
+  /* ---------- Rendern ---------- */
+  function render(){
+    const list = document.getElementById('list');
+    const shown = tasks.filter(t =>
+      filter === 'alle' ? true : filter === 'offen' ? !t.done : t.done);
+
+    if (!shown.length){
+      const msgs = {
+        alle:     ['📝', 'Noch keine Aufgaben.<br>Füge oben deine erste hinzu!'],
+        offen:    ['🎉', 'Nichts mehr offen – super!'],
+        erledigt: ['💪', 'Noch nichts erledigt.<br>Du schaffst das!']
+      };
+      list.innerHTML = `<div class="empty"><div class="big">${msgs[filter][0]}</div>${msgs[filter][1]}</div>`;
+    } else {
+      list.innerHTML = shown.map(t => `
+        <div class="task ${t.done ? 'done' : ''}" data-id="${t.id}">
+          <div class="check">${t.done ? '✓' : ''}</div>
+          <div class="body">
+            <div class="title">${esc(t.text)}</div>
+            <div class="meta">
+              <span class="prio-dot" style="background:${PRIOS[t.prio].color}"></span>${PRIOS[t.prio].name}
+              · ${new Date(t.created).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})}
+            </div>
+          </div>
+        </div>`).join('');
+      list.querySelectorAll('.task').forEach(attachTaskEvents);
+    }
+
+    const done = tasks.filter(t => t.done).length;
+    const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+    document.getElementById('progText').textContent = `${done} von ${tasks.length} erledigt`;
+    document.getElementById('progPct').textContent = pct + '%';
+    document.getElementById('progFill').style.width = pct + '%';
+  }
+
+  /* ---------- Gesten pro Aufgabe ---------- */
+  function attachTaskEvents(el){
+    const id = el.dataset.id;
+    let startX = 0, startY = 0, dx = 0, swiping = false, longTimer;
+
+    el.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      dx = 0; swiping = false;
+      longTimer = setTimeout(() => { longTimer = null; vibrate(35); editTask(id); }, 550);
+    }, { passive:true });
+
+    el.addEventListener('touchmove', e => {
+      const mx = e.touches[0].clientX - startX;
+      const my = e.touches[0].clientY - startY;
+      if (!swiping && Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my)) swiping = true;
+      if (Math.abs(mx) > 10 || Math.abs(my) > 10) { clearTimeout(longTimer); longTimer = 0; }
+      if (swiping){
+        dx = mx;
+        el.style.transform = `translateX(${dx}px)`;
+        el.style.opacity = Math.max(.35, 1 - Math.abs(dx)/260);
+      }
+    }, { passive:true });
+
+    el.addEventListener('touchend', () => {
+      if (longTimer) clearTimeout(longTimer);
+      if (swiping){
+        if (dx > 90){ toggleTask(id); }
+        else if (dx < -90){ deleteTask(id, true); return; }
+        el.style.transform = ''; el.style.opacity = '';
+      } else if (longTimer !== null){
+        toggleTaskOnTap(id);
+      }
+    });
+
+    el.addEventListener('touchcancel', () => {
+      clearTimeout(longTimer);
+      el.style.transform = ''; el.style.opacity = '';
+    });
+
+    // Desktop-/Maus-Unterstützung
+    el.addEventListener('click', e => {
+      if (!('ontouchstart' in window)) toggleTaskOnTap(id);
+    });
+  }
+  function toggleTaskOnTap(id){ toggleTask(id); }
+
+  /* ---------- Drawer ---------- */
+  const drawerEl = document.getElementById('drawer');
+  const overlayEl = document.getElementById('overlay');
+  function openDrawer(){ drawerEl.classList.add('show'); overlayEl.classList.add('show'); renderDrawer(); vibrate(20); }
+  function closeDrawer(){ drawerEl.classList.remove('show'); overlayEl.classList.remove('show'); }
+  window.onAndroidBack = function(){
+    if (drawerEl.classList.contains('show')){ closeDrawer(); return true; }
+    return false;
+  };
+
+  function renderDrawer(){
+    const c = document.getElementById('dContent');
+    if (drawerTab === 'verlauf'){
+      c.innerHTML = history.length
+        ? history.map(h => `
+            <div class="hist-item">
+              <span class="ico">${h.icon}</span>
+              <span class="what">${esc(h.text)}</span>
+              <span class="when">${timeAgo(h.ts)}</span>
+            </div>`).join('')
+        : '<div class="empty"><div class="big">🕘</div>Noch kein Verlauf vorhanden.</div>';
+    } else if (drawerTab === 'statistik'){
+      const done = tasks.filter(t => t.done).length;
+      const open = tasks.length - done;
+      const hoch = tasks.filter(t => !t.done && t.prio === 2).length;
+      const heute = tasks.filter(t => new Date(t.created).toDateString() === new Date().toDateString()).length;
+      c.innerHTML = `
+        <div class="stat-grid">
+          <div class="stat"><div class="num">${tasks.length}</div><div class="lbl">Gesamt</div></div>
+          <div class="stat"><div class="num">${done}</div><div class="lbl">Erledigt ✅</div></div>
+          <div class="stat"><div class="num">${open}</div><div class="lbl">Offen 📌</div></div>
+          <div class="stat"><div class="num">${hoch}</div><div class="lbl">Hohe Priorität 🔴</div></div>
+          <div class="stat"><div class="num">${heute}</div><div class="lbl">Heute erstellt 🗓️</div></div>
+          <div class="stat"><div class="num">${history.length}</div><div class="lbl">Aktionen 🕘</div></div>
+        </div>`;
+    } else {
+      c.innerHTML = `
+        <button class="d-action" id="darkBtn">${dark ? '☀️ Heller Modus' : '🌙 Dunkler Modus'}</button>
+        <button class="d-action" id="clearDoneBtn">🧹 Erledigte löschen</button>
+        <button class="d-action red" id="clearHistBtn">🕘 Verlauf leeren</button>
+        <button class="d-action red" id="clearAllBtn">🗑️ Alle Aufgaben löschen</button>
+        <div class="hint" style="margin-top:12px">Meine Todos v1.0<br>📳 Schütteln = Rückgängig</div>`;
+      document.getElementById('darkBtn').onclick = () => {
+        dark = !dark; document.body.classList.toggle('dark', dark); save(); renderDrawer(); vibrate(25);
+      };
+      document.getElementById('clearDoneBtn').onclick = () => {
+        const n = tasks.filter(t => t.done).length;
+        if (!n) { snack('Keine erledigten Aufgaben.'); return; }
+        tasks.filter(t => t.done).forEach((t, i) => undoStack.push({ type:'delete', task:{...t}, index: 0 }));
+        tasks = tasks.filter(t => !t.done);
+        logHistory('🧹', `${n} erledigte Aufgabe(n) gelöscht`);
+        save(); render(); snack(`${n} erledigte Aufgabe(n) gelöscht ✅`); vibrate(35);
+      };
+      document.getElementById('clearHistBtn').onclick = () => {
+        history = []; save(); renderDrawer(); snack('Verlauf geleert.'); vibrate(35);
+      };
+      document.getElementById('clearAllBtn').onclick = () => {
+        if (!tasks.length){ snack('Liste ist schon leer.'); return; }
+        if (confirm('Wirklich ALLE Aufgaben löschen?')){
+          tasks.forEach(t => undoStack.push({ type:'delete', task:{...t}, index: 0 }));
+          logHistory('🗑️', 'Alle Aufgaben gelöscht');
+          tasks = []; save(); render(); closeDrawer();
+          snack('Alles gelöscht – schütteln stellt einzeln wieder her 📳'); vibrate(50);
+        }
+      };
+    }
+  }
+
+  /* ---------- Events ---------- */
+  document.getElementById('addBtn').addEventListener('click', addTask);
+  document.getElementById('input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  document.getElementById('prioBtn').addEventListener('click', function(){
+    prio = (prio + 1) % 3;
+    this.textContent = PRIOS[prio].icon;
+    snack(`Priorität: ${PRIOS[prio].name}`);
+    vibrate(20);
+  });
+  document.getElementById('menuBtn').addEventListener('click', openDrawer);
+  overlayEl.addEventListener('click', closeDrawer);
+  document.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', function(){
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    filter = this.dataset.f;
+    vibrate(15);
+    render();
+  }));
+  document.querySelectorAll('.d-tab').forEach(tb => tb.addEventListener('click', function(){
+    document.querySelectorAll('.d-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    drawerTab = this.dataset.t;
+    renderDrawer();
+  }));
+
+  /* ---------- Start ---------- */
+  if (dark) document.body.classList.add('dark');
+  const now = new Date();
+  document.getElementById('dateLabel').textContent =
+    now.toLocaleDateString('de-DE', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const h = now.getHours();
+  document.getElementById('greeting').textContent =
+    (h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : 'Guten Abend') + ' ✨';
+  render();
+})();
+</script>
+</body>
+</html>
