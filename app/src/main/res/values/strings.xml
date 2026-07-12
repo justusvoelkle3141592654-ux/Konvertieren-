@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hörbuch Konverter</string>
+
+    <string name="tts_loading">Sprachausgabe wird geladen …</string>
+    <string name="ready">Bereit. Wähle eine PDF- oder Textdatei – oder füge Text ein.</string>
+    <string name="loading_file">Datei wird gelesen …</string>
+    <string name="pick_file">📄 PDF- oder Textdatei auswählen</string>
+    <string name="clear_text">Text entfernen</string>
+    <string name="text_hint">… oder Text hier direkt einfügen</string>
+    <string name="file_loaded">Geladen: %1$s (%2$d Zeichen)</string>
+
+    <string name="voice">Stimme</string>
+    <string name="voice_online">Online-Stimme</string>
+    <string name="voice_offline">Offline-Stimme</string>
+    <string name="voice_default">Standardstimme</string>
+    <string name="speed_label">Geschwindigkeit: %1$.2fx</string>
+    <string name="pitch_label">Tonhöhe: %1$.2fx</string>
+
+    <string name="speak">▶ Vorlesen</string>
+    <string name="stop">⏹ Stopp</string>
+    <string name="play_progress">Abschnitt %1$d von %2$d</string>
+
+    <string name="export">🎧 Hörbuch erstellen (M4A speichern)</string>
+    <string name="export_started">Konvertierung gestartet – Fortschritt siehe Benachrichtigung. Die fertige Datei landet unter Musik/Hoerbuecher.</string>
+    <string name="export_starting">Starte Konvertierung …</string>
+    <string name="export_progress">Abschnitt %1$d von %2$d wird umgewandelt …</string>
+    <string name="export_done">Fertig! „%1$s“ wurde unter Musik/Hoerbuecher gespeichert. Antippen zum Abspielen.</string>
+    <string name="export_failed">Konvertierung fehlgeschlagen: %1$s</string>
+    <string name="cancel">Abbrechen</string>
+
+    <string name="notif_channel">Hörbuch-Konvertierung</string>
+    <string name="notif_title">Hörbuch Konverter</string>
+
+    <string name="error_no_text">Kein Text vorhanden. Bitte Datei laden oder Text einfügen.</string>
+    <string name="error_empty_file">Die Datei enthält keinen lesbaren Text. Bei gescannten PDFs (nur Bilder) ist keine Umwandlung möglich.</string>
+    <string name="error_load">Datei konnte nicht gelesen werden: %1$s</string>
+    <string name="error_tts_init">Sprachausgabe konnte nicht gestartet werden. Bitte prüfe, ob eine TTS-Engine (z. B. „Sprachdienste von Google“) installiert ist.</string>
+    <string name="error_tts_synth">Die Sprachausgabe konnte den Text nicht umwandeln.</string>
+    <string name="error_save">Die Audiodatei konnte nicht gespeichert werden.</string>
+</resources>
