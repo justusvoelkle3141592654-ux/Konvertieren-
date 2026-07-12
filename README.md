@@ -18,7 +18,7 @@ komplett offline, ohne Werbung, ohne Kosten, ohne Längenbegrenzung.
 
 Die fertige APK wird bei jedem Push automatisch von GitHub Actions gebaut:
 
-1. Auf der GitHub-Seite des Projekts unter **Releases** das Release **„Neueste APK“** öffnen
+1. Auf der GitHub-Seite des Projekts unter **Releases** das Release **„Hörbuch Konverter – neueste APK“** öffnen
 2. `Hoerbuch-Konverter.apk` auf dem Handy herunterladen
 3. Beim Installieren einmalig **„Installation aus unbekannten Quellen“** erlauben
 

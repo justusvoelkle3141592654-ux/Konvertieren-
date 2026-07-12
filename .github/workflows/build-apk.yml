@@ -39,8 +39,8 @@ jobs:
       - name: APK als Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk
-          name: "Neueste APK"
+          tag_name: hoerbuch-apk
+          name: "Hörbuch Konverter – neueste APK"
           body: |
             Automatisch gebaute APK des Hörbuch Konverters.
             Einfach `Hoerbuch-Konverter.apk` auf dem Handy herunterladen und installieren
