@@ -260,18 +260,44 @@ document.addEventListener("visibilitychange", () => {
 /* ==========================================================================
    Modals
    ========================================================================== */
-function openModal(id) { $(`#${id}-modal`).classList.remove("hidden"); document.body.style.overflow = "hidden"; }
-function closeModal(id) {
-  $(`#${id}-modal`).classList.add("hidden");
-  document.body.style.overflow = "";
-  if (id === "player") $("#player-frame").innerHTML = "";
+/* Offene Modals werden in die Browser-History eingehängt, damit die
+   Zurück-Taste (Android!) sie schließt, statt die App zu beenden. */
+const openModals = [];
+
+function openModal(id) {
+  $(`#${id}-modal`).classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  openModals.push(id);
+  history.pushState({ nexusModal: openModals.length }, "");
 }
+
+function hardCloseModal(id) {
+  $(`#${id}-modal`).classList.add("hidden");
+  if (!openModals.length) document.body.style.overflow = "";
+  if (id === "player") $("#player-frame").innerHTML = "";
+  if (id === "reader") readerItem = null;
+}
+
+function closeModal(id) {
+  if (openModals[openModals.length - 1] === id) {
+    history.back(); // popstate übernimmt das eigentliche Schließen
+  } else {
+    const idx = openModals.lastIndexOf(id);
+    if (idx !== -1) openModals.splice(idx, 1);
+    hardCloseModal(id);
+  }
+}
+
+window.addEventListener("popstate", () => {
+  const id = openModals.pop();
+  if (id) hardCloseModal(id);
+  if (!openModals.length) document.body.style.overflow = "";
+});
+
 $$("[data-close]").forEach((el) =>
   el.addEventListener("click", () => closeModal(el.dataset.close)));
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  if (!$("#player-modal").classList.contains("hidden")) closeModal("player");
-  else if (!$("#settings-modal").classList.contains("hidden")) closeModal("settings");
+  if (e.key === "Escape" && openModals.length) closeModal(openModals[openModals.length - 1]);
 });
 
 /* ==========================================================================
@@ -296,6 +322,7 @@ async function fetchTagesschau(src, key, ressort = "") {
       title: n.title,
       desc: n.firstSentence || "",
       link: n.detailsweb,
+      detailsUrl: n.details || null,
       date: new Date(n.date),
       image:
         n.teaserImage?.imageVariants?.["16x9-640"] ||
@@ -379,12 +406,16 @@ async function loadNews(force = false) {
   renderNews();
 }
 
+/* Alle gerenderten Artikel nach ID, damit Klicks den Reader öffnen können. */
+const newsRegistry = new Map();
+
 function newsCardHtml(n, { row = false } = {}) {
+  newsRegistry.set(n.id, n);
   const showImg = state.settings.showImages && n.image;
   const compact = row || state.settings.compactNews;
   return `
-    <a class="news-card glass ${compact ? "row" : ""}" href="${escapeHtml(n.link)}"
-       target="_blank" rel="noopener noreferrer" data-news-id="${escapeHtml(n.id)}">
+    <article class="news-card glass ${compact ? "row" : ""}" data-news-id="${escapeHtml(n.id)}"
+       role="button" tabindex="0" aria-label="${escapeHtml(n.title)}">
       ${showImg ? `<img class="news-img" src="${escapeHtml(n.image)}" alt="" loading="lazy"
           onerror="this.remove()">` : ""}
       <div class="news-body">
@@ -395,8 +426,23 @@ function newsCardHtml(n, { row = false } = {}) {
         <span class="news-title">${escapeHtml(n.title)}</span>
         ${n.desc && !compact ? `<span class="news-desc">${escapeHtml(n.desc)}</span>` : ""}
       </div>
-    </a>`;
+    </article>`;
 }
+
+/* Ein Klick auf irgendeine News-Karte öffnet den Artikel-Reader in der App. */
+document.addEventListener("click", (e) => {
+  const card = e.target.closest(".news-card[data-news-id]");
+  if (!card) return;
+  const item = newsRegistry.get(card.dataset.newsId);
+  if (item) openReader(item);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const card = e.target.closest?.(".news-card[data-news-id]");
+  if (!card) return;
+  const item = newsRegistry.get(card.dataset.newsId);
+  if (item) openReader(item);
+});
 
 function renderNewsChips() {
   const chips = [["all", "Alle"], ...Object.entries(NEWS_SOURCES)
@@ -435,12 +481,219 @@ function renderNews() {
     .filter((n) => !forYouIds.has(n.id))
     .map((n) => newsCardHtml(n))
     .join("") || `<div class="empty-state"><p>Keine Meldungen für diese Auswahl.</p></div>`;
-
-  $$("[data-news-id]").forEach((a) =>
-    a.addEventListener("click", () => bumpStat("read"), { once: true }));
 }
 
 $("#news-retry").addEventListener("click", () => loadNews(true));
+
+/* ==========================================================================
+   ARTIKEL-READER — Volltext direkt in der App
+   ========================================================================== */
+let readerItem = null;
+
+function stripTags(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return (tmp.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+/* Liefert den Artikel als Liste von Blöcken: { t: "p" | "h", text } */
+async function extractArticle(n) {
+  // 1) tagesschau: strukturierte Inhalte über die offizielle API
+  if (n.detailsUrl) {
+    try {
+      const d = await fetchJson(n.detailsUrl, { timeout: 12000 });
+      const blocks = (d.content || [])
+        .filter((c) => c.type === "text" || c.type === "headline")
+        .map((c) => ({ t: c.type === "headline" ? "h" : "p", text: stripTags(c.value || "") }))
+        .filter((b) => b.text && !/^(mehr|weniger)$/i.test(b.text));
+      if (blocks.length) return blocks;
+    } catch {}
+  }
+
+  const html = await fetchText(n.link, { timeout: 14000 });
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  // 2) JSON-LD: viele Redaktionen liefern den kompletten Text als articleBody
+  for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      const objects = [];
+      (function walk(x) {
+        if (!x) return;
+        if (Array.isArray(x)) { x.forEach(walk); return; }
+        if (typeof x === "object") { objects.push(x); walk(x["@graph"]); }
+      })(JSON.parse(script.textContent));
+      const art = objects.find((o) => typeof o.articleBody === "string" && o.articleBody.length > 250);
+      if (art) {
+        return art.articleBody
+          .split(/\n+/)
+          .map((t) => t.trim())
+          .filter((t) => t.length > 1)
+          .map((text) => ({ t: "p", text }));
+      }
+    } catch {}
+  }
+
+  // 3) Fallback: Absätze aus dem Artikel-Container der Seite
+  for (const sel of ['[itemprop="articleBody"]', "article", "main"]) {
+    const el = doc.querySelector(sel);
+    if (!el) continue;
+    const paras = [...el.querySelectorAll("p")]
+      .map((p) => p.textContent.replace(/\s+/g, " ").trim())
+      .filter((t) => t.length > 60);
+    if (paras.join(" ").length > 350) return paras.map((text) => ({ t: "p", text }));
+  }
+
+  throw new Error("Kein Artikeltext gefunden");
+}
+
+function renderReaderBody(blocks) {
+  $("#reader-loader").classList.add("hidden");
+  $("#reader-body").innerHTML = blocks
+    .map((b) => (b.t === "h" ? `<h2>${escapeHtml(b.text)}</h2>` : `<p>${escapeHtml(b.text)}</p>`))
+    .join("");
+  const totalLen = blocks.reduce((sum, b) => sum + b.text.length, 0);
+  if (totalLen < 350) {
+    const note = $("#reader-note");
+    note.textContent =
+      "Der vollständige Text ist nur auf der Website verfügbar (möglicherweise ein Plus-Artikel).";
+    note.classList.remove("hidden");
+  }
+}
+
+async function openReader(n) {
+  readerItem = n;
+  $("#reader-source").textContent = n.sourceName;
+  $("#reader-date").textContent = `${timeAgo(n.date)} · ${new Date(n.date).toLocaleDateString("de-DE",
+    { day: "numeric", month: "long", year: "numeric" })}`;
+  $("#reader-title").textContent = n.title;
+  $("#reader-body").innerHTML = "";
+  $("#reader-note").classList.add("hidden");
+  $("#reader-browser").href = n.link;
+  const img = $("#reader-img");
+  if (state.settings.showImages && n.image) {
+    img.src = n.image;
+    img.classList.remove("hidden");
+  } else {
+    img.classList.add("hidden");
+  }
+  $("#reader-scroll").scrollTop = 0;
+  updateReaderBookmarkBtn();
+  openModal("reader");
+  bumpStat("read");
+
+  if (n.content) { renderReaderBody(n.content); return; }
+
+  $("#reader-loader").classList.remove("hidden");
+  try {
+    const blocks = await extractArticle(n);
+    if (readerItem !== n) return; // Reader wurde inzwischen geschlossen
+    n.content = blocks;
+    syncBookmarkContent(n);
+    renderReaderBody(blocks);
+  } catch {
+    if (readerItem !== n) return;
+    $("#reader-loader").classList.add("hidden");
+    if (n.desc) $("#reader-body").innerHTML = `<p>${escapeHtml(n.desc)}</p>`;
+    const note = $("#reader-note");
+    note.textContent = "Der Artikel konnte nicht vollständig geladen werden — unten geht's zum Original.";
+    note.classList.remove("hidden");
+  }
+}
+
+$("#reader-share").addEventListener("click", async () => {
+  if (!readerItem) return;
+  const data = { title: readerItem.title, url: readerItem.link };
+  if (navigator.share) {
+    try { await navigator.share(data); } catch {}
+  } else {
+    try {
+      await navigator.clipboard.writeText(readerItem.link);
+      toast("Link kopiert.");
+    } catch { toast("Teilen wird hier nicht unterstützt."); }
+  }
+});
+
+/* ==========================================================================
+   MERKLISTE — Artikel & Videos speichern (Artikel offline lesbar)
+   ========================================================================== */
+state.bookmarks = LS.get("nexus_bookmarks", []);
+const saveBookmarks = () => LS.set("nexus_bookmarks", state.bookmarks);
+
+const isBookmarked = (key) => state.bookmarks.some((b) => b.key === key);
+
+function toggleBookmark(entry) {
+  const idx = state.bookmarks.findIndex((b) => b.key === entry.key);
+  if (idx !== -1) {
+    state.bookmarks.splice(idx, 1);
+    toast("Aus der Merkliste entfernt.");
+  } else {
+    state.bookmarks.unshift({ ...entry, savedAt: Date.now() });
+    if (state.bookmarks.length > 100) state.bookmarks.pop();
+    toast("Zur Merkliste hinzugefügt.");
+  }
+  saveBookmarks();
+  renderBookmarks();
+}
+
+/* Artikeltext nachträglich in ein bestehendes Lesezeichen übernehmen. */
+function syncBookmarkContent(n) {
+  const bm = state.bookmarks.find((b) => b.key === n.link);
+  if (bm && n.content) { bm.item = { ...bm.item, content: n.content }; saveBookmarks(); }
+}
+
+function updateReaderBookmarkBtn() {
+  $("#reader-bookmark").classList.toggle(
+    "bookmarked", !!readerItem && isBookmarked(readerItem.link));
+}
+
+$("#reader-bookmark").addEventListener("click", () => {
+  if (!readerItem) return;
+  const n = readerItem;
+  toggleBookmark({
+    type: "article", key: n.link,
+    title: n.title, sub: n.sourceName, image: n.image,
+    item: { ...n, date: +new Date(n.date) },
+  });
+  updateReaderBookmarkBtn();
+});
+
+function renderBookmarks() {
+  const box = $("#bookmark-list");
+  if (!state.bookmarks.length) {
+    box.innerHTML = `<div class="glass card"><p class="footnote" style="margin:0">
+      Noch nichts gemerkt. Tippe im Artikel oder Videoplayer auf das Lesezeichen-Symbol.</p></div>`;
+    return;
+  }
+  box.innerHTML = state.bookmarks.map((b, i) => `
+    <div class="bookmark-row glass" data-bm-index="${i}" role="button" tabindex="0">
+      ${b.image ? `<img class="bookmark-thumb" src="${escapeHtml(b.image)}" alt="" loading="lazy">`
+        : `<span class="bookmark-thumb"></span>`}
+      <div class="bookmark-info">
+        <strong>${escapeHtml(b.title)}</strong>
+        <span class="bookmark-kind">${b.type === "video" ? "▶ Video" : "📰"} · ${escapeHtml(b.sub || "")}
+          · ${timeAgo(b.savedAt)}</span>
+      </div>
+      <button class="icon-btn small bm-remove" data-bm-remove="${i}" aria-label="Entfernen">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join("");
+
+  $$("[data-bm-remove]", box).forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.bookmarks.splice(Number(btn.dataset.bmRemove), 1);
+      saveBookmarks();
+      renderBookmarks();
+    }));
+
+  $$("[data-bm-index]", box).forEach((row) =>
+    row.addEventListener("click", () => {
+      const b = state.bookmarks[Number(row.dataset.bmIndex)];
+      if (!b) return;
+      if (b.type === "video") openPlayer(b.key, b.title, b.sub);
+      else openReader({ ...b.item, date: new Date(b.item.date) });
+    }));
+}
 
 /* ==========================================================================
    FINANZEN
@@ -693,18 +946,59 @@ async function loadVideos(force = false) {
   }
 }
 
-function openPlayer(id, title, channel) {
+let currentVideo = null;
+
+function playerEmbedUrl() {
+  const { id, alt } = currentVideo;
   const autoplay = state.settings.autoplay ? 1 : 0;
+  // Ersatz-Player (Invidious) für Videos, deren Einbettung YouTube blockiert
+  return alt
+    ? `https://inv.nadeko.net/embed/${encodeURIComponent(id)}?autoplay=${autoplay}`
+    : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=${autoplay}&rel=0&playsinline=1`;
+}
+
+function mountPlayerFrame() {
   $("#player-frame").innerHTML = `
-    <iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=${autoplay}&rel=0"
+    <iframe src="${playerEmbedUrl()}"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-      allowfullscreen title="${escapeHtml(title)}"></iframe>`;
+      allowfullscreen title="${escapeHtml(currentVideo.title)}"></iframe>`;
+}
+
+function updatePlayerBookmarkBtn() {
+  const active = currentVideo && isBookmarked(currentVideo.id);
+  const btn = $("#player-bookmark");
+  btn.querySelector("span").textContent = active ? "Gemerkt ✓" : "Merken";
+  btn.querySelector("span").classList.toggle("bm-active", !!active);
+}
+
+function openPlayer(id, title, channel) {
+  currentVideo = { id, title, channel, alt: false };
+  mountPlayerFrame();
+  $("#player-alt").textContent = "Anderer Player";
   $("#player-title").textContent = title;
   $("#player-channel").textContent = channel;
-  $("#player-yt-link").href = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+  updatePlayerBookmarkBtn();
   openModal("player");
   bumpStat("videos");
 }
+
+$("#player-alt").addEventListener("click", () => {
+  if (!currentVideo) return;
+  currentVideo.alt = !currentVideo.alt;
+  mountPlayerFrame();
+  $("#player-alt").textContent = currentVideo.alt ? "Standard-Player" : "Anderer Player";
+  toast(currentVideo.alt ? "Ersatz-Player aktiv." : "Standard-Player aktiv.");
+});
+
+$("#player-bookmark").addEventListener("click", () => {
+  if (!currentVideo) return;
+  toggleBookmark({
+    type: "video", key: currentVideo.id,
+    title: currentVideo.title, sub: currentVideo.channel,
+    image: `https://i.ytimg.com/vi/${currentVideo.id}/mqdefault.jpg`,
+  });
+  updatePlayerBookmarkBtn();
+});
 
 /* --- Suche mit Vorschlägen --- */
 const searchInput = $("#video-search");
@@ -1080,6 +1374,7 @@ function exportAllData() {
     profil: currentUser() ? { name: currentUser().name, email: currentUser().email } : null,
     einstellungen: state.settings,
     aufgaben: state.todos,
+    merkliste: state.bookmarks,
     statistiken: state.stats,
   });
   toast("Export gestartet.");
@@ -1233,7 +1528,7 @@ $("#topic-form").addEventListener("submit", (e) => {
 
 $("#settings-reset").addEventListener("click", () => {
   if (!confirm("Wirklich alles zurücksetzen? Konten, Aufgaben und Einstellungen werden gelöscht.")) return;
-  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users"]
+  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users", "nexus_bookmarks"]
     .forEach((k) => LS.remove(k));
   Object.keys(localStorage)
     .filter((k) => k.startsWith("nexus_settings_"))
@@ -1258,6 +1553,7 @@ function boot() {
   syncSettingsUi();
   renderProfile();
   renderTodos();
+  renderBookmarks();
   renderVideoChips();
   initShake();
   loadNews(true);           // beim Öffnen immer frisch laden

@@ -24,6 +24,9 @@ wie eine native App installieren (PWA-Manifest inklusive).
 ### 📰 News
 - Ausschließlich geprüfte Redaktionen: **tagesschau, ZDFheute, ZEIT ONLINE, WELT**
 - Große Karten mit Bildern, durchscrollbar, nach Aktualität sortiert
+- **Artikel-Reader in der App:** Antippen öffnet den vollständigen Artikeltext in
+  einer eigenen Leseansicht (tagesschau-API, JSON-LD bzw. Artikel-Extraktion) —
+  mit Teilen-Funktion und Link zum Original
 - Quellen-Filter per Chips, Quellen in den Einstellungen an-/abschaltbar
 - **Personalisierung:** eigene Themen anlegen → passende Artikel erscheinen unter „Für dich“
 - Aktualisiert sich bei jedem Öffnen der App automatisch
@@ -38,7 +41,13 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - YouTube-Suche mit **Live-Suchvorschlägen**, Tastatursteuerung inklusive
 - Trends nach Region (DE/AT/CH/US) sowie Kategorie-Chips
 - Videos starten **direkt in der App** (youtube-nocookie-Player) — ohne Account
+- **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
+
+### 🔖 Merkliste
+- Artikel und Videos mit einem Tipp merken (Lesezeichen-Symbol in Reader/Player)
+- Gemerkte Artikel werden **mit Volltext gespeichert und sind offline lesbar**
+- Verwaltung im Profil-Tab, im Datenexport enthalten
 
 ### ✅ Aufgaben
 - To-do-Liste mit Fortschrittsring, Filtern und „Erledigte löschen“

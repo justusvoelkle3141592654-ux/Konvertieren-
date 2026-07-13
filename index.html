@@ -239,6 +239,11 @@
           </button>
         </div>
       </div>
+
+      <!-- Merkliste (auch ohne Anmeldung verfügbar) -->
+      <h3 class="section-label">Merkliste</h3>
+      <div id="bookmark-list" class="bookmark-list"></div>
+      <p class="footnote">Gemerkte Artikel werden mit Text gespeichert und sind auch offline lesbar.</p>
     </section>
   </main>
 
@@ -272,7 +277,11 @@
         <span id="player-channel"></span>
       </div>
       <div class="player-actions">
-        <a class="btn btn-secondary small" id="player-yt-link" target="_blank" rel="noopener noreferrer">Auf YouTube öffnen</a>
+        <button class="btn btn-secondary small" id="player-bookmark">
+          <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Merken</span>
+        </button>
+        <button class="btn btn-secondary small" id="player-alt">Anderer Player</button>
         <button class="btn btn-secondary small" data-close="player">Schließen</button>
       </div>
     </div>
@@ -400,6 +409,37 @@
         </div>
 
         <p class="footnote center">Nexus · Version 1.0 · Alle Daten bleiben auf deinem Gerät.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Artikel-Reader ================= -->
+  <div class="modal reader-modal hidden" id="reader-modal" role="dialog" aria-modal="true" aria-label="Artikel">
+    <div class="modal-backdrop" data-close="reader"></div>
+    <div class="reader-sheet glass">
+      <div class="reader-topbar">
+        <button class="icon-btn" data-close="reader" aria-label="Zurück">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+        </button>
+        <span class="source-badge" id="reader-source"></span>
+        <span class="reader-topbar-spacer"></span>
+        <button class="icon-btn" id="reader-share" aria-label="Teilen">
+          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+        </button>
+        <button class="icon-btn" id="reader-bookmark" aria-label="Merken">
+          <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+      </div>
+      <div class="reader-scroll" id="reader-scroll">
+        <img class="reader-img hidden" id="reader-img" alt="">
+        <div class="reader-content">
+          <div class="news-meta"><span id="reader-date"></span></div>
+          <h1 id="reader-title"></h1>
+          <div class="reader-body" id="reader-body"></div>
+          <div class="loader hidden" id="reader-loader"><div class="spinner"></div><span>Artikel wird geladen …</span></div>
+          <div class="reader-note hidden" id="reader-note"></div>
+          <a class="btn btn-secondary block" id="reader-browser" target="_blank" rel="noopener noreferrer">Original im Browser öffnen</a>
+        </div>
       </div>
     </div>
   </div>
