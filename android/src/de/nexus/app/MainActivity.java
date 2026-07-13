@@ -11,17 +11,32 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collections;
+
 /**
  * Nexus — schlanker WebView-Container für die Web-App in assets/.
- * Externe Links öffnen im Browser, YouTube-Videos laufen im eingebetteten
- * Player inklusive Vollbild, Sensoren (Schütteln) und localStorage bleiben aktiv.
+ *
+ * Die App wird über eine virtuelle https-Adresse ausgeliefert (Anfragen an
+ * APP_HOST werden abgefangen und aus assets/ beantwortet). Dadurch hat die
+ * Seite einen echten https-Ursprung — Voraussetzung dafür, dass YouTube-
+ * Embeds einen gültigen Referer erhalten (sonst "Fehler 153") und dass
+ * Web-APIs wie crypto.subtle verfügbar sind. Externe Links öffnen im
+ * Browser, Videos laufen im eingebetteten Player inklusive Vollbild.
  */
 public class MainActivity extends Activity {
+
+    /** Reservierte Domain für WebView-Assets — wird nie ins Netz aufgelöst. */
+    private static final String APP_HOST = "appassets.androidx.dev";
+    private static final String START_URL = "https://" + APP_HOST + "/assets/index.html";
 
     private WebView webView;
     private FrameLayout rootLayout;
@@ -42,19 +57,34 @@ public class MainActivity extends Activity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
-        // Erlaubt fetch()/XHR von file:// zu den News-/Finanz-APIs (nur eigene, gebündelte App-Dateien).
-        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                if (!APP_HOST.equals(url.getHost())) return null;
+                String path = url.getPath() == null ? "" : url.getPath();
+                if (path.startsWith("/assets/") && !path.contains("..")) {
+                    String name = path.substring("/assets/".length());
+                    try {
+                        InputStream in = getAssets().open(name);
+                        return new WebResourceResponse(mimeFor(name), "utf-8", in);
+                    } catch (IOException ignored) {
+                    }
+                }
+                return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found",
+                        Collections.<String, String>emptyMap(),
+                        new ByteArrayInputStream(new byte[0]));
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri url = request.getUrl();
-                if ("file".equals(url.getScheme())) return false;
+                if (APP_HOST.equals(url.getHost())) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, url));
                 } catch (Exception ignored) {
@@ -100,7 +130,17 @@ public class MainActivity extends Activity {
         window.setStatusBarColor(Color.BLACK);
         window.setNavigationBarColor(Color.BLACK);
 
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.loadUrl(START_URL);
+    }
+
+    private static String mimeFor(String name) {
+        if (name.endsWith(".html")) return "text/html";
+        if (name.endsWith(".css")) return "text/css";
+        if (name.endsWith(".js")) return "text/javascript";
+        if (name.endsWith(".svg")) return "image/svg+xml";
+        if (name.endsWith(".webmanifest") || name.endsWith(".json")) return "application/manifest+json";
+        if (name.endsWith(".png")) return "image/png";
+        return "application/octet-stream";
     }
 
     private void setSystemUiForFullscreen(boolean fullscreen) {

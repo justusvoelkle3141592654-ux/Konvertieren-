@@ -865,6 +865,10 @@ function firstFulfilled(promises) {
   });
 }
 
+/* Instanz des Ersatz-Players; wird auf die zuletzt nachweislich
+   erreichbare Invidious-Instanz gesetzt. */
+let altEmbedBase = INVIDIOUS_INSTANCES[0];
+
 async function searchVideos(query) {
   const region = state.settings.videoRegion;
   const attempts = [];
@@ -880,7 +884,7 @@ async function searchVideos(query) {
         .filter((v) => (v.type ? v.type === "stream" : true))
         .map(normalizePiped).filter((v) => v.id);
       if (!list.length) throw new Error("leer");
-      return list;
+      return { list, embedBase: null };
     }));
   }
 
@@ -892,11 +896,13 @@ async function searchVideos(query) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const list = (await r.json()).map(normalizeInvidious).filter((v) => v.id);
       if (!list.length) throw new Error("leer");
-      return list;
+      return { list, embedBase: base };
     }));
   }
 
-  return firstFulfilled(attempts);
+  const { list, embedBase } = await firstFulfilled(attempts);
+  if (embedBase) altEmbedBase = embedBase;
+  return list;
 }
 
 async function loadVideos(force = false) {
@@ -953,13 +959,14 @@ function playerEmbedUrl() {
   const autoplay = state.settings.autoplay ? 1 : 0;
   // Ersatz-Player (Invidious) für Videos, deren Einbettung YouTube blockiert
   return alt
-    ? `https://inv.nadeko.net/embed/${encodeURIComponent(id)}?autoplay=${autoplay}`
+    ? `${altEmbedBase}/embed/${encodeURIComponent(id)}?autoplay=${autoplay}`
     : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=${autoplay}&rel=0&playsinline=1`;
 }
 
 function mountPlayerFrame() {
+  // referrerpolicy="origin": YouTube verlangt einen Referer, sonst Fehler 153.
   $("#player-frame").innerHTML = `
-    <iframe src="${playerEmbedUrl()}"
+    <iframe src="${playerEmbedUrl()}" referrerpolicy="origin"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
       allowfullscreen title="${escapeHtml(currentVideo.title)}"></iframe>`;
 }
