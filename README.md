@@ -44,6 +44,14 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
 
+### 💬 KI-Chat
+- Eigener Chat-Tab mit KI-Assistent „Nexi“
+- **Kostenlos ohne Konto** über Pollinations.ai (GPT- und Mistral-Modelle),
+  mit Live-Streaming der Antworten und Markdown-Darstellung (Code, fett)
+- Optional: eigener API-Schlüssel in den Einstellungen → direkter Chat mit
+  **Claude** (Anthropic) oder **ChatGPT** (OpenAI); Schlüssel bleiben lokal
+- Verlauf wird gespeichert, „Neuer Chat“ und Löschen in den Einstellungen
+
 ### 🔖 Merkliste
 - Artikel und Videos mit einem Tipp merken (Lesezeichen-Symbol in Reader/Player)
 - Gemerkte Artikel werden **mit Volltext gespeichert und sind offline lesbar**

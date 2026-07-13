@@ -152,6 +152,8 @@ const DEFAULT_SETTINGS = {
   staleMinutes: 5,
   shakeUndo: true,
   shakeSensitivity: "normal", // low | normal | high
+  anthropicKey: "",
+  openaiKey: "",
 };
 
 const state = {
@@ -1117,6 +1119,250 @@ function renderVideoChips(activeQuery = "__trending") {
 $("#videos-retry").addEventListener("click", () => loadVideos(true));
 
 /* ==========================================================================
+   KI-CHAT — kostenlos über Pollinations, optional Claude/ChatGPT per API-Key
+   ========================================================================== */
+const CHAT_SYSTEM_PROMPT =
+  "Du bist Nexi, der KI-Assistent der Nexus-App (Nachrichten, Finanzen, Videos, Aufgaben). " +
+  "Antworte hilfreich, korrekt und auf Deutsch, außer der Nutzer schreibt in einer anderen Sprache. " +
+  "Halte Antworten kompakt, außer eine ausführliche Antwort ist nötig.";
+
+const CHAT_PROVIDERS = [
+  { id: "gpt", label: "GPT (gratis)", type: "pollinations", model: "openai" },
+  { id: "mistral", label: "Mistral (gratis)", type: "pollinations", model: "mistral" },
+  { id: "claude", label: "Claude", type: "anthropic", model: "claude-sonnet-5", keyName: "anthropicKey" },
+  { id: "chatgpt", label: "ChatGPT", type: "openai", model: "gpt-4o-mini", keyName: "openaiKey" },
+];
+
+state.chat = LS.get("nexus_chat", { provider: "gpt", messages: [] });
+const saveChat = () => LS.set("nexus_chat", state.chat);
+let chatBusy = false;
+
+function chatProvider() {
+  return CHAT_PROVIDERS.find((p) => p.id === state.chat.provider) || CHAT_PROVIDERS[0];
+}
+
+function providerAvailable(p) {
+  return !p.keyName || !!state.settings[p.keyName];
+}
+
+/* --- Mini-Markdown (Codeblöcke, Inline-Code, fett) --- */
+function mdToHtml(text) {
+  const parts = String(text).split("```");
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      const code = part.replace(/^[a-zA-Z0-9_-]*\n/, "");
+      return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
+    }
+    return escapeHtml(part)
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+  }).join("");
+}
+
+function renderChatModels() {
+  $("#chat-models").innerHTML = CHAT_PROVIDERS.map((p) => {
+    const locked = !providerAvailable(p);
+    return `<button class="chip ${p.id === state.chat.provider ? "active" : ""}"
+      data-provider="${p.id}">${escapeHtml(p.label)}${locked ? '<span class="lock">🔒</span>' : ""}</button>`;
+  }).join("");
+  $$("#chat-models .chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      const p = CHAT_PROVIDERS.find((x) => x.id === chip.dataset.provider);
+      if (!providerAvailable(p)) {
+        toast(`Hinterlege zuerst deinen ${p.type === "anthropic" ? "Anthropic" : "OpenAI"}-API-Schlüssel in den Einstellungen.`);
+        openModal("settings");
+        return;
+      }
+      state.chat.provider = p.id;
+      saveChat();
+      renderChatModels();
+    }));
+}
+
+function renderChat() {
+  const box = $("#chat-list");
+  if (!state.chat.messages.length) {
+    box.innerHTML = `<div class="chat-empty glass card">
+      <strong>Hallo! 👋</strong>
+      Ich bin Nexi. Frag mich nach Nachrichten, erklär dir Finanzbegriffe,
+      lass dir Ideen geben — oder einfach plaudern.</div>`;
+    return;
+  }
+  box.innerHTML = state.chat.messages.map((m, i) => {
+    if (m.role === "user")
+      return `<div class="chat-msg user">${escapeHtml(m.content)}</div>`;
+    if (m.error)
+      return `<div class="chat-msg assistant error" data-retry="${i}">${escapeHtml(m.content)}<br><small>Antippen zum erneuten Versuchen</small></div>`;
+    return `<div class="chat-msg assistant">${mdToHtml(m.content)}
+      ${m.model ? `<span class="chat-model-tag">${escapeHtml(m.model)}</span>` : ""}</div>`;
+  }).join("");
+  $$("[data-retry]", box).forEach((el) =>
+    el.addEventListener("click", () => retryChat(Number(el.dataset.retry))));
+  box.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+}
+
+/* OpenAI-kompatibler Endpunkt mit Streaming (Pollinations & OpenAI) */
+async function chatOpenAiCompatible(url, headers, model, messages, onDelta) {
+  const res = await fetchWithTimeout(url, 90000, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ model, messages, stream: true }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const type = res.headers.get("content-type") || "";
+  if (!type.includes("event-stream")) {
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error("Leere Antwort");
+    return text;
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop();
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith("data:")) continue;
+      const payload = t.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
+        if (delta) { full += delta; onDelta(full); }
+      } catch {}
+    }
+  }
+  if (!full) throw new Error("Leere Antwort");
+  return full;
+}
+
+async function chatAnthropic(model, messages) {
+  const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", 90000, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": state.settings.anthropicKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({ model, max_tokens: 1500, system: CHAT_SYSTEM_PROMPT, messages }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  const text = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
+  if (!text) throw new Error("Leere Antwort");
+  return text;
+}
+
+async function requestChatReply(onDelta) {
+  const p = chatProvider();
+  const history = state.chat.messages
+    .filter((m) => !m.error)
+    .slice(-16)
+    .map((m) => ({ role: m.role, content: m.content }));
+
+  if (p.type === "anthropic") return chatAnthropic(p.model, history);
+
+  const messages = [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...history];
+  if (p.type === "openai") {
+    return chatOpenAiCompatible("https://api.openai.com/v1/chat/completions",
+      { authorization: `Bearer ${state.settings.openaiKey}` }, p.model, messages, onDelta);
+  }
+  // Pollinations (kostenlos, ohne Konto)
+  try {
+    return await chatOpenAiCompatible("https://text.pollinations.ai/openai", {},
+      p.model, messages, onDelta);
+  } catch (err) {
+    // Fallback: einfacher GET-Endpunkt
+    const last = history[history.length - 1]?.content || "";
+    const text = await fetchText(
+      `https://text.pollinations.ai/${encodeURIComponent(last.slice(0, 800))}?model=${p.model}&system=${encodeURIComponent(CHAT_SYSTEM_PROMPT.slice(0, 200))}`,
+      { timeout: 60000 });
+    if (!text || text.length < 2) throw err;
+    return text;
+  }
+}
+
+async function sendChatMessage(text) {
+  if (chatBusy) { toast("Einen Moment — ich antworte noch."); return; }
+  chatBusy = true;
+  $("#chat-send").disabled = true;
+
+  const p = chatProvider();
+  state.chat.messages.push({ role: "user", content: text });
+  renderChat();
+
+  // Tipp-Indikator anhängen
+  const box = $("#chat-list");
+  const pending = document.createElement("div");
+  pending.className = "chat-msg assistant";
+  pending.innerHTML = `<span class="typing"><i></i><i></i><i></i></span>`;
+  box.appendChild(pending);
+  pending.scrollIntoView({ block: "end" });
+
+  try {
+    const reply = await requestChatReply((partial) => {
+      pending.innerHTML = mdToHtml(partial);
+    });
+    state.chat.messages.push({ role: "assistant", content: reply, model: p.label });
+  } catch (err) {
+    state.chat.messages.push({
+      role: "assistant", error: true,
+      content: `Antwort fehlgeschlagen (${err.message || "Netzwerkfehler"}).`,
+    });
+  } finally {
+    if (state.chat.messages.length > 60) state.chat.messages.splice(0, state.chat.messages.length - 60);
+    saveChat();
+    chatBusy = false;
+    $("#chat-send").disabled = false;
+    renderChat();
+  }
+}
+
+function retryChat(errorIndex) {
+  if (chatBusy) return;
+  // Fehlermeldung entfernen und die letzte Nutzerfrage erneut senden
+  const userMsg = state.chat.messages[errorIndex - 1];
+  if (!userMsg || userMsg.role !== "user") return;
+  state.chat.messages.splice(errorIndex - 1, 2);
+  saveChat();
+  renderChat();
+  sendChatMessage(userMsg.content);
+}
+
+$("#chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = $("#chat-text");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  sendChatMessage(text);
+});
+
+$("#chat-new").addEventListener("click", () => {
+  if (chatBusy) return;
+  state.chat.messages = [];
+  saveChat();
+  renderChat();
+  toast("Neuer Chat gestartet.");
+});
+
+$("#settings-clear-chat").addEventListener("click", () => {
+  state.chat.messages = [];
+  saveChat();
+  renderChat();
+  toast("Chatverlauf gelöscht.");
+});
+
+/* ==========================================================================
    AUFGABEN — mit Schütteln-zum-Rückgängigmachen
    ========================================================================== */
 let todoFilter = "all";
@@ -1379,7 +1625,7 @@ function exportAllData() {
   downloadJson("nexus-daten.json", {
     exportiert: new Date().toISOString(),
     profil: currentUser() ? { name: currentUser().name, email: currentUser().email } : null,
-    einstellungen: state.settings,
+    einstellungen: { ...state.settings, anthropicKey: undefined, openaiKey: undefined },
     aufgaben: state.todos,
     merkliste: state.bookmarks,
     statistiken: state.stats,
@@ -1535,7 +1781,7 @@ $("#topic-form").addEventListener("submit", (e) => {
 
 $("#settings-reset").addEventListener("click", () => {
   if (!confirm("Wirklich alles zurücksetzen? Konten, Aufgaben und Einstellungen werden gelöscht.")) return;
-  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users", "nexus_bookmarks"]
+  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users", "nexus_bookmarks", "nexus_chat"]
     .forEach((k) => LS.remove(k));
   Object.keys(localStorage)
     .filter((k) => k.startsWith("nexus_settings_"))
@@ -1543,11 +1789,23 @@ $("#settings-reset").addEventListener("click", () => {
   location.reload();
 });
 
+/* API-Schlüssel für den KI-Chat */
+[["#set-anthropic-key", "anthropicKey"], ["#set-openai-key", "openaiKey"]].forEach(([id, key]) => {
+  $(id).addEventListener("change", () => {
+    state.settings[key] = $(id).value.trim();
+    saveSettings();
+    renderChatModels();
+    if (state.settings[key]) toast("API-Schlüssel gespeichert (nur lokal).");
+  });
+});
+
 function syncSettingsUi() {
   segSyncs.forEach((fn) => fn());
   switchSyncs.forEach((fn) => fn());
   $$("#accent-row .accent-dot").forEach((d) =>
     d.classList.toggle("active", d.dataset.accent === state.settings.accent));
+  $("#set-anthropic-key").value = state.settings.anthropicKey || "";
+  $("#set-openai-key").value = state.settings.openaiKey || "";
   renderSourceToggles();
   renderTopics();
 }
@@ -1561,6 +1819,8 @@ function boot() {
   renderProfile();
   renderTodos();
   renderBookmarks();
+  renderChatModels();
+  renderChat();
   renderVideoChips();
   initShake();
   loadNews(true);           // beim Öffnen immer frisch laden

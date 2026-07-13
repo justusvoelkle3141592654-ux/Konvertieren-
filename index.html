@@ -132,6 +132,25 @@
       </div>
     </section>
 
+    <!-- ===== KI-Chat ===== -->
+    <section class="view" id="view-chat" data-view="chat">
+      <div class="view-head">
+        <h2>KI-Chat</h2>
+        <button class="btn btn-secondary small" id="chat-new">Neuer Chat</button>
+      </div>
+      <div class="chip-row" id="chat-models"></div>
+      <div class="chat-list" id="chat-list"></div>
+      <form class="chat-input glass" id="chat-form">
+        <input type="text" id="chat-text" placeholder="Frag mich etwas …" maxlength="2000"
+               autocomplete="off" enterkeyhint="send" aria-label="Nachricht">
+        <button type="submit" class="btn btn-primary" id="chat-send" aria-label="Senden">
+          <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+        </button>
+      </form>
+      <p class="footnote">Kostenloser Modus über Pollinations.ai — ohne Konto. Mit eigenem API-Schlüssel
+        (Einstellungen) chattest du direkt mit Claude oder ChatGPT. Antworten können Fehler enthalten.</p>
+    </section>
+
     <!-- ===== Aufgaben ===== -->
     <section class="view" id="view-todos" data-view="todos">
       <div class="view-head">
@@ -261,6 +280,10 @@
       <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 9 5 3-5 3z"/></svg>
       <span>Videos</span>
     </button>
+    <button class="tab" data-tab="chat" aria-label="KI-Chat">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6M9 10h6"/></svg>
+      <span>Chat</span>
+    </button>
     <button class="tab" data-tab="todos" aria-label="Aufgaben">
       <svg viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       <span>Aufgaben</span>
@@ -363,6 +386,24 @@
             <input type="checkbox" class="switch" id="set-autoplay" checked>
           </label>
         </div>
+
+        <h3 class="section-label">KI-Chat</h3>
+        <div class="glass card list-card">
+          <label class="field" style="margin:10px 14px">
+            <span>Anthropic-API-Schlüssel (für Claude)</span>
+            <input type="password" id="set-anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+          </label>
+          <label class="field" style="margin:0 14px 10px">
+            <span>OpenAI-API-Schlüssel (für ChatGPT)</span>
+            <input type="password" id="set-openai-key" placeholder="sk-…" autocomplete="off">
+          </label>
+          <button class="list-row danger" id="settings-clear-chat">
+            <span>Chatverlauf löschen</span>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
+        </div>
+        <p class="footnote" style="margin-top:6px">Ohne Schlüssel läuft der Chat kostenlos über Pollinations.ai.
+          Schlüssel werden nur lokal auf deinem Gerät gespeichert.</p>
 
         <h3 class="section-label">Aktualisierung</h3>
         <div class="glass card list-card">
