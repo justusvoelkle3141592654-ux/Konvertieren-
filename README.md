@@ -53,6 +53,27 @@ wie eine native App installieren (PWA-Manifest inklusive).
   Video-Region, Autoplay, Aktualisierungsintervall, Schüttel-Empfindlichkeit,
   Datenexport (JSON) und App-Reset
 
+## Android-App (APK)
+
+Im Ordner `android/` liegt ein schlankes natives Android-Projekt (WebView-Container),
+die fertig signierte App unter **`android/dist/nexus.apk`**.
+
+Installation auf dem Handy:
+1. `nexus.apk` aufs Gerät übertragen (z. B. per Download aus diesem Repo).
+2. Antippen → Android fragt nach „Unbekannte Apps installieren“ → für den
+   Browser/Dateimanager einmalig erlauben.
+3. Installieren — fertig. Die App heißt „Nexus“ und hat das Welt-N-Logo.
+
+Selbst bauen (ohne Android Studio, siehe Kopf von `android/build.sh`):
+
+```bash
+cd android && ./build.sh   # erzeugt dist/nexus.apk
+```
+
+Hinweis: Die APK ist mit einem lokalen Schlüssel selbstsigniert (`nexus.keystore`,
+nur für den Privatgebrauch) — für eine Play-Store-Veröffentlichung wäre ein
+eigener Release-Schlüssel nötig.
+
 ## Technik
 
 - Vanilla HTML/CSS/JS (`index.html`, `styles.css`, `app.js`)
