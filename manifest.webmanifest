@@ -1,0 +1,13 @@
+{
+  "name": "Nexus — News · Finanzen · Videos",
+  "short_name": "Nexus",
+  "description": "Nachrichten von geprüften Redaktionen, Finanzmärkte und YouTube-Videos — alles in einer App.",
+  "lang": "de",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

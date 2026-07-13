@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="Nexus — Nachrichten, Finanzen und Videos. Ein Ort für alles.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Nexus — News · Finanzen · Videos</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Ambient background -->
+  <div class="ambient" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="orb orb-c"></div>
+  </div>
+
+  <!-- ================= Header ================= -->
+  <header class="app-header glass">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <clipPath id="globeClip"><circle cx="32" cy="32" r="26"/></clipPath>
+        </defs>
+        <circle cx="32" cy="32" r="26" class="globe-fill"/>
+        <g clip-path="url(#globeClip)" class="globe-lines">
+          <ellipse cx="32" cy="32" rx="12" ry="26" fill="none"/>
+          <ellipse cx="32" cy="32" rx="22" ry="26" fill="none"/>
+          <line x1="6" y1="22" x2="58" y2="22"/>
+          <line x1="4" y1="32" x2="60" y2="32"/>
+          <line x1="6" y1="42" x2="58" y2="42"/>
+        </g>
+        <circle cx="32" cy="32" r="26" class="globe-ring" fill="none"/>
+        <text x="32" y="41" text-anchor="middle" class="globe-n">N</text>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">Nexus</span>
+        <span class="brand-sub" id="header-sub">News · Finanzen · Videos</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-refresh" title="Aktualisieren" aria-label="Aktualisieren">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" title="Einstellungen" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="avatar-btn" id="btn-profile" title="Profil" aria-label="Profil">
+        <span id="avatar-label">?</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= Main ================= -->
+  <main id="main">
+
+    <!-- ===== News ===== -->
+    <section class="view active" id="view-news" data-view="news">
+      <div class="view-head">
+        <h2>Nachrichten</h2>
+        <span class="view-meta" id="news-updated"></span>
+      </div>
+      <div class="chip-row" id="news-chips" role="tablist" aria-label="Quellen"></div>
+      <div id="news-foryou-wrap" class="foryou-wrap hidden">
+        <h3 class="section-label">Für dich</h3>
+        <div class="foryou-scroller" id="news-foryou"></div>
+      </div>
+      <div id="news-list" class="news-list" aria-live="polite"></div>
+      <div class="loader hidden" id="news-loader"><div class="spinner"></div><span>Nachrichten werden geladen …</span></div>
+      <div class="empty-state hidden" id="news-error">
+        <p>Nachrichten konnten nicht geladen werden.</p>
+        <button class="btn btn-secondary" id="news-retry">Erneut versuchen</button>
+      </div>
+      <p class="footnote">Quellen: tagesschau, ZDFheute, ZEIT ONLINE, WELT — geprüfte Redaktionen, keine sonstigen Quellen.</p>
+    </section>
+
+    <!-- ===== Finanzen ===== -->
+    <section class="view" id="view-finance" data-view="finance">
+      <div class="view-head">
+        <h2>Finanzen</h2>
+        <span class="view-meta" id="finance-updated"></span>
+      </div>
+
+      <h3 class="section-label">Indizes &amp; Rohstoffe</h3>
+      <div class="index-scroller" id="finance-indices">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+
+      <h3 class="section-label">Kryptowährungen</h3>
+      <div class="glass card" id="finance-crypto">
+        <div class="loader"><div class="spinner"></div><span>Kurse werden geladen …</span></div>
+      </div>
+
+      <h3 class="section-label">Devisen · 1 EUR</h3>
+      <div class="fx-grid" id="finance-fx"></div>
+
+      <h3 class="section-label">Wirtschaft — tagesschau</h3>
+      <div class="news-list compact" id="finance-news"></div>
+
+      <p class="footnote">Kursdaten: CoinGecko, Frankfurter (EZB), Yahoo Finance. Keine Anlageberatung.</p>
+    </section>
+
+    <!-- ===== Videos ===== -->
+    <section class="view" id="view-videos" data-view="videos">
+      <div class="view-head">
+        <h2>Videos</h2>
+        <span class="view-meta" id="videos-meta"></span>
+      </div>
+      <div class="search-wrap">
+        <div class="search-bar glass">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="search" id="video-search" placeholder="YouTube durchsuchen …" autocomplete="off" enterkeyhint="search" aria-label="YouTube durchsuchen">
+          <button class="icon-btn small hidden" id="video-search-clear" aria-label="Suche löschen">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="suggestions glass hidden" id="video-suggestions" role="listbox"></div>
+      </div>
+      <div class="chip-row" id="video-chips"></div>
+      <div class="video-grid" id="video-grid"></div>
+      <div class="loader hidden" id="videos-loader"><div class="spinner"></div><span>Videos werden geladen …</span></div>
+      <div class="empty-state hidden" id="videos-error">
+        <p id="videos-error-text">Videos konnten nicht geladen werden.</p>
+        <button class="btn btn-secondary" id="videos-retry">Erneut versuchen</button>
+      </div>
+    </section>
+
+    <!-- ===== Aufgaben ===== -->
+    <section class="view" id="view-todos" data-view="todos">
+      <div class="view-head">
+        <h2>Aufgaben</h2>
+        <span class="view-meta" id="todos-meta"></span>
+      </div>
+
+      <div class="glass card todo-progress-card">
+        <div class="todo-progress-text">
+          <strong id="todo-progress-label">Keine Aufgaben</strong>
+          <span id="todo-progress-sub">Füge deine erste Aufgabe hinzu</span>
+        </div>
+        <svg class="progress-ring" viewBox="0 0 44 44" aria-hidden="true">
+          <circle class="ring-bg" cx="22" cy="22" r="19"/>
+          <circle class="ring-fg" id="todo-ring" cx="22" cy="22" r="19"/>
+        </svg>
+      </div>
+
+      <form class="todo-input glass" id="todo-form">
+        <input type="text" id="todo-text" placeholder="Neue Aufgabe …" maxlength="200" autocomplete="off" aria-label="Neue Aufgabe">
+        <button type="submit" class="btn btn-primary" aria-label="Hinzufügen">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </form>
+
+      <div class="chip-row" id="todo-filters">
+        <button class="chip active" data-filter="all">Alle</button>
+        <button class="chip" data-filter="open">Offen</button>
+        <button class="chip" data-filter="done">Erledigt</button>
+        <button class="chip chip-ghost" id="todo-clear-done">Erledigte löschen</button>
+      </div>
+
+      <ul class="todo-list" id="todo-list"></ul>
+
+      <div class="shake-hint glass" id="shake-hint">
+        <svg viewBox="0 0 24 24"><path d="M9 3 5 7l4 4M15 21l4-4-4-4"/><rect x="9" y="7" width="6" height="10" rx="2"/></svg>
+        <div>
+          <strong>Schütteln = Rückgängig</strong>
+          <span id="shake-hint-sub">Schüttle dein Gerät, um die letzte Aktion rückgängig zu machen. Am Rechner: Strg&nbsp;+&nbsp;Z.</span>
+        </div>
+        <button class="btn btn-secondary small hidden" id="btn-enable-motion">Aktivieren</button>
+      </div>
+    </section>
+
+    <!-- ===== Profil ===== -->
+    <section class="view" id="view-profile" data-view="profile">
+      <div class="view-head">
+        <h2>Profil</h2>
+      </div>
+
+      <!-- Logged out -->
+      <div id="auth-box">
+        <div class="glass card auth-card">
+          <div class="auth-tabs">
+            <button class="auth-tab active" data-authtab="login">Anmelden</button>
+            <button class="auth-tab" data-authtab="register">Registrieren</button>
+          </div>
+          <form id="auth-form" novalidate>
+            <label class="field hidden" id="field-name">
+              <span>Name</span>
+              <input type="text" id="auth-name" placeholder="Dein Name" autocomplete="name" maxlength="40">
+            </label>
+            <label class="field">
+              <span>E-Mail</span>
+              <input type="email" id="auth-email" placeholder="name@beispiel.de" autocomplete="email" required>
+            </label>
+            <label class="field">
+              <span>Passwort</span>
+              <input type="password" id="auth-password" placeholder="Mindestens 6 Zeichen" autocomplete="current-password" minlength="6" required>
+            </label>
+            <p class="form-error hidden" id="auth-error"></p>
+            <button type="submit" class="btn btn-primary block" id="auth-submit">Anmelden</button>
+          </form>
+          <p class="footnote center">Dein Konto wird ausschließlich lokal auf diesem Gerät gespeichert.</p>
+        </div>
+      </div>
+
+      <!-- Logged in -->
+      <div id="profile-box" class="hidden">
+        <div class="glass card profile-card">
+          <div class="profile-avatar" id="profile-avatar">A</div>
+          <div class="profile-info">
+            <strong id="profile-name">—</strong>
+            <span id="profile-email">—</span>
+            <span class="profile-since" id="profile-since"></span>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="glass card stat"><strong id="stat-read">0</strong><span>Artikel gelesen</span></div>
+          <div class="glass card stat"><strong id="stat-videos">0</strong><span>Videos gesehen</span></div>
+          <div class="glass card stat"><strong id="stat-done">0</strong><span>Aufgaben erledigt</span></div>
+        </div>
+        <div class="glass card list-card">
+          <button class="list-row" id="profile-open-settings">
+            <span>Einstellungen &amp; Personalisierung</span>
+            <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <button class="list-row" id="profile-export">
+            <span>Meine Daten exportieren</span>
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+          </button>
+          <button class="list-row danger" id="profile-logout">
+            <span>Abmelden</span>
+            <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= Tabbar ================= -->
+  <nav class="tabbar glass" aria-label="Hauptnavigation">
+    <button class="tab active" data-tab="news" aria-label="News">
+      <svg viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V6"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></svg>
+      <span>News</span>
+    </button>
+    <button class="tab" data-tab="finance" aria-label="Finanzen">
+      <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
+      <span>Finanzen</span>
+    </button>
+    <button class="tab" data-tab="videos" aria-label="Videos">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 9 5 3-5 3z"/></svg>
+      <span>Videos</span>
+    </button>
+    <button class="tab" data-tab="todos" aria-label="Aufgaben">
+      <svg viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Aufgaben</span>
+    </button>
+  </nav>
+
+  <!-- ================= Video Player ================= -->
+  <div class="modal hidden" id="player-modal" role="dialog" aria-modal="true" aria-label="Videoplayer">
+    <div class="modal-backdrop" data-close="player"></div>
+    <div class="player-sheet glass">
+      <div class="player-frame" id="player-frame"></div>
+      <div class="player-info">
+        <strong id="player-title"></strong>
+        <span id="player-channel"></span>
+      </div>
+      <div class="player-actions">
+        <a class="btn btn-secondary small" id="player-yt-link" target="_blank" rel="noopener noreferrer">Auf YouTube öffnen</a>
+        <button class="btn btn-secondary small" data-close="player">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Einstellungen ================= -->
+  <div class="modal hidden" id="settings-modal" role="dialog" aria-modal="true" aria-label="Einstellungen">
+    <div class="modal-backdrop" data-close="settings"></div>
+    <div class="sheet glass">
+      <div class="sheet-head">
+        <h2>Einstellungen</h2>
+        <button class="icon-btn" data-close="settings" aria-label="Schließen">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+
+        <h3 class="section-label">Darstellung</h3>
+        <div class="glass card list-card">
+          <div class="list-row">
+            <span>Design</span>
+            <div class="segmented" id="seg-theme">
+              <button data-value="dark" class="active">Dunkel</button>
+              <button data-value="light">Hell</button>
+              <button data-value="system">System</button>
+            </div>
+          </div>
+          <div class="list-row">
+            <span>Akzentfarbe</span>
+            <div class="accent-row" id="accent-row">
+              <button class="accent-dot accent-mono active" data-accent="mono" aria-label="Monochrom"></button>
+              <button class="accent-dot accent-blue" data-accent="blue" aria-label="Blau"></button>
+              <button class="accent-dot accent-green" data-accent="green" aria-label="Grün"></button>
+            </div>
+          </div>
+          <label class="list-row">
+            <span>Bewegung reduzieren</span>
+            <input type="checkbox" class="switch" id="set-reduce-motion">
+          </label>
+        </div>
+
+        <h3 class="section-label">Nachrichten</h3>
+        <div class="glass card list-card" id="settings-sources"></div>
+        <div class="glass card list-card">
+          <label class="list-row">
+            <span>Bilder anzeigen</span>
+            <input type="checkbox" class="switch" id="set-images" checked>
+          </label>
+          <label class="list-row">
+            <span>Kompakte Ansicht</span>
+            <input type="checkbox" class="switch" id="set-compact">
+          </label>
+        </div>
+        <div class="glass card topics-card">
+          <div class="topics-head">
+            <strong>Meine Themen</strong>
+            <span class="footnote">Passende Artikel erscheinen unter „Für dich“.</span>
+          </div>
+          <div class="topic-chips" id="topic-chips"></div>
+          <form class="topic-add" id="topic-form">
+            <input type="text" id="topic-input" placeholder="Thema hinzufügen, z. B. Klima" maxlength="30" autocomplete="off">
+            <button type="submit" class="btn btn-secondary small">Hinzufügen</button>
+          </form>
+        </div>
+
+        <h3 class="section-label">Videos</h3>
+        <div class="glass card list-card">
+          <div class="list-row">
+            <span>Trends-Region</span>
+            <div class="segmented" id="seg-region">
+              <button data-value="DE" class="active">DE</button>
+              <button data-value="AT">AT</button>
+              <button data-value="CH">CH</button>
+              <button data-value="US">US</button>
+            </div>
+          </div>
+          <label class="list-row">
+            <span>Autoplay im Player</span>
+            <input type="checkbox" class="switch" id="set-autoplay" checked>
+          </label>
+        </div>
+
+        <h3 class="section-label">Aktualisierung</h3>
+        <div class="glass card list-card">
+          <label class="list-row">
+            <span>Beim Öffnen aktualisieren</span>
+            <input type="checkbox" class="switch" id="set-autorefresh" checked>
+          </label>
+          <div class="list-row">
+            <span>Als veraltet gilt nach</span>
+            <div class="segmented" id="seg-stale">
+              <button data-value="2">2 Min.</button>
+              <button data-value="5" class="active">5 Min.</button>
+              <button data-value="15">15 Min.</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-label">Aufgaben</h3>
+        <div class="glass card list-card">
+          <label class="list-row">
+            <span>Schütteln zum Rückgängigmachen</span>
+            <input type="checkbox" class="switch" id="set-shake" checked>
+          </label>
+          <div class="list-row">
+            <span>Empfindlichkeit</span>
+            <div class="segmented" id="seg-shake-sens">
+              <button data-value="low">Niedrig</button>
+              <button data-value="normal" class="active">Normal</button>
+              <button data-value="high">Hoch</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-label">Daten</h3>
+        <div class="glass card list-card">
+          <button class="list-row" id="settings-export">
+            <span>Alle Daten exportieren (JSON)</span>
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+          </button>
+          <button class="list-row danger" id="settings-reset">
+            <span>App zurücksetzen</span>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
+        </div>
+
+        <p class="footnote center">Nexus · Version 1.0 · Alle Daten bleiben auf deinem Gerät.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
