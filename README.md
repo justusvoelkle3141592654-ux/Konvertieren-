@@ -21,8 +21,14 @@ wie eine native App installieren (PWA-Manifest inklusive).
 
 ## Funktionen
 
+### 🌤️ Wetter
+- Wetterkarte oben im News-Tab: aktuelle Lage, gefühlte Temperatur, Wind,
+  Luftfeuchte, 12-Stunden-Verlauf und 7-Tage-Vorhersage (Open-Meteo, ohne Schlüssel)
+- Ort frei wählbar (Geocoding-Suche in den Einstellungen), abschaltbar
+
 ### 📰 News
 - Ausschließlich geprüfte Redaktionen: **tagesschau, ZDFheute, ZEIT ONLINE, WELT**
+- Eigener **„✦ Für dich“-Tab**, sobald persönliche Themen angelegt sind
 - Große Karten mit Bildern, durchscrollbar, nach Aktualität sortiert
 - **Artikel-Reader in der App:** Antippen öffnet den vollständigen Artikeltext in
   einer eigenen Leseansicht (tagesschau-API, JSON-LD bzw. Artikel-Extraktion) —

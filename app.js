@@ -154,6 +154,8 @@ const DEFAULT_SETTINGS = {
   shakeSensitivity: "normal", // low | normal | high
   anthropicKey: "",
   openaiKey: "",
+  weatherShow: true,
+  weatherPlace: { name: "Berlin", lat: 52.52, lon: 13.41 },
 };
 
 const state = {
@@ -303,6 +305,103 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ==========================================================================
+   WETTER — Open-Meteo (kostenlos, ohne Schlüssel)
+   ========================================================================== */
+const WMO = {
+  0: ["☀️", "Klar"], 1: ["🌤️", "Überwiegend sonnig"], 2: ["⛅", "Teils bewölkt"], 3: ["☁️", "Bedeckt"],
+  45: ["🌫️", "Nebel"], 48: ["🌫️", "Reifnebel"],
+  51: ["🌦️", "Leichter Niesel"], 53: ["🌦️", "Niesel"], 55: ["🌧️", "Starker Niesel"],
+  56: ["🌧️", "Gefr. Niesel"], 57: ["🌧️", "Gefr. Niesel"],
+  61: ["🌧️", "Leichter Regen"], 63: ["🌧️", "Regen"], 65: ["🌧️", "Starker Regen"],
+  66: ["🌧️", "Gefr. Regen"], 67: ["🌧️", "Gefr. Regen"],
+  71: ["🌨️", "Leichter Schnee"], 73: ["🌨️", "Schnee"], 75: ["❄️", "Starker Schnee"], 77: ["🌨️", "Schneegriesel"],
+  80: ["🌦️", "Leichte Schauer"], 81: ["🌦️", "Schauer"], 82: ["🌧️", "Starke Schauer"],
+  85: ["🌨️", "Schneeschauer"], 86: ["🌨️", "Schneeschauer"],
+  95: ["⛈️", "Gewitter"], 96: ["⛈️", "Gewitter mit Hagel"], 99: ["⛈️", "Schweres Gewitter"],
+};
+const wmo = (code) => WMO[code] || ["🌡️", "—"];
+
+let weatherLoadedAt = 0;
+
+async function loadWeather(force = false) {
+  const wrap = $("#weather-wrap");
+  if (!state.settings.weatherShow) { wrap.innerHTML = ""; return; }
+  if (!force && weatherLoadedAt && Date.now() - weatherLoadedAt < state.settings.staleMinutes * 60000) return;
+
+  const { name, lat, lon } = state.settings.weatherPlace;
+  try {
+    const data = await fetchJson(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m" +
+      "&hourly=temperature_2m,weather_code" +
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
+      "&timezone=auto&forecast_days=7", { timeout: 10000 });
+    weatherLoadedAt = Date.now();
+
+    const cur = data.current;
+    const [icon, desc] = wmo(cur.weather_code);
+
+    // Nächste 12 Stunden ab jetzt
+    const nowIdx = Math.max(0, data.hourly.time.findIndex((t) => new Date(t) >= new Date()) - 1);
+    const hours = data.hourly.time.slice(nowIdx, nowIdx + 12).map((t, i) => {
+      const [hIcon] = wmo(data.hourly.weather_code[nowIdx + i]);
+      return `<div class="weather-hour">
+        <span>${i === 0 ? "Jetzt" : new Date(t).getHours() + " Uhr"}</span>
+        <span class="wi">${hIcon}</span>
+        <strong>${Math.round(data.hourly.temperature_2m[nowIdx + i])}°</strong>
+      </div>`;
+    }).join("");
+
+    const days = data.daily.time.map((t, i) => {
+      const [dIcon, dDesc] = wmo(data.daily.weather_code[i]);
+      const dayName = i === 0 ? "Heute"
+        : new Date(t).toLocaleDateString("de-DE", { weekday: "short" });
+      return `<div class="weather-day">
+        <span class="wd-name">${dayName}</span>
+        <span class="wi">${dIcon}</span>
+        <span class="wd-desc">${dDesc}</span>
+        <span class="wd-temp">${Math.round(data.daily.temperature_2m_max[i])}°
+          <small>/ ${Math.round(data.daily.temperature_2m_min[i])}°</small></span>
+      </div>`;
+    }).join("");
+
+    wrap.innerHTML = `
+      <div class="weather-card glass">
+        <div class="weather-now">
+          <div class="weather-main">
+            <span class="weather-temp">${Math.round(cur.temperature_2m)}°</span>
+            <span class="weather-desc">${icon} ${desc}</span>
+            <span class="weather-sub">Gefühlt ${Math.round(cur.apparent_temperature)}° ·
+              Wind ${Math.round(cur.wind_speed_10m)} km/h · ${cur.relative_humidity_2m} %</span>
+          </div>
+          <button class="weather-city" id="weather-city">📍 ${escapeHtml(name)}</button>
+        </div>
+        <div class="weather-hours">${hours}</div>
+        <div class="weather-days">${days}</div>
+      </div>`;
+    $("#weather-city").addEventListener("click", () => {
+      openModal("settings");
+      setTimeout(() => $("#set-weather-city").focus(), 350);
+    });
+  } catch {
+    if (!wrap.innerHTML) wrap.innerHTML = "";
+  }
+}
+
+async function setWeatherCity(query) {
+  const data = await fetchJson(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=de`,
+    { timeout: 10000 });
+  const hit = data.results?.[0];
+  if (!hit) throw new Error("Ort nicht gefunden");
+  state.settings.weatherPlace = { name: hit.name, lat: hit.latitude, lon: hit.longitude };
+  saveSettings();
+  weatherLoadedAt = 0;
+  await loadWeather(true);
+  return hit;
+}
+
+/* ==========================================================================
    NEWS — ausschließlich geprüfte Redaktionen
    ========================================================================== */
 const NEWS_SOURCES = {
@@ -370,6 +469,7 @@ async function fetchRss(src, key) {
 }
 
 async function loadNews(force = false) {
+  loadWeather(force); // Wetterkarte parallel aktualisieren
   if (!force && state.newsItems.length && !isStale("news")) { renderNews(); return; }
 
   const loader = $("#news-loader");
@@ -447,9 +547,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 function renderNewsChips() {
-  const chips = [["all", "Alle"], ...Object.entries(NEWS_SOURCES)
+  const chips = [["all", "Alle"]];
+  if (state.settings.topics.length) chips.push(["foryou", "✦ Für dich"]);
+  chips.push(...Object.entries(NEWS_SOURCES)
     .filter(([key]) => state.settings.sources[key])
-    .map(([key, s]) => [key, s.name])];
+    .map(([key, s]) => [key, s.name]));
   $("#news-chips").innerHTML = chips.map(([key, label]) =>
     `<button class="chip ${state.newsFilter === key ? "active" : ""}" data-source="${key}">
        ${escapeHtml(label)}</button>`).join("");
@@ -460,21 +562,40 @@ function renderNewsChips() {
     }));
 }
 
+function matchesTopics(n) {
+  const text = (n.title + " " + n.desc).toLowerCase();
+  return state.settings.topics.some((t) => text.includes(t.toLowerCase()));
+}
+
 function renderNews() {
+  const validFilters = ["all", "foryou", ...Object.keys(NEWS_SOURCES)];
+  if (!validFilters.includes(state.newsFilter)) state.newsFilter = "all";
+  if (state.newsFilter === "foryou" && !state.settings.topics.length) state.newsFilter = "all";
   renderNewsChips();
-  if (!Object.keys(NEWS_SOURCES).includes(state.newsFilter) && state.newsFilter !== "all")
-    state.newsFilter = "all";
+
+  const hasTopics = state.settings.topics.length > 0;
+  const wrap = $("#news-foryou-wrap");
+
+  // Eigener "Für dich"-Tab: nur Artikel zu den persönlichen Themen
+  if (state.newsFilter === "foryou") {
+    wrap.classList.add("hidden");
+    const matched = state.newsItems.filter(matchesTopics);
+    $("#news-list").innerHTML = matched.map((n) => newsCardHtml(n)).join("") ||
+      `<div class="empty-state">
+         <p>Zu deinen Themen (${escapeHtml(state.settings.topics.join(", "))})
+            ist in den aktuellen Meldungen gerade nichts dabei.<br>
+            Tipp: Allgemeinere Begriffe wie „Politik“ oder „Fußball“ treffen öfter.</p>
+         <button class="btn btn-secondary" id="foryou-manage">Themen verwalten</button>
+       </div>`;
+    $("#foryou-manage")?.addEventListener("click", () => openModal("settings"));
+    return;
+  }
 
   const items = state.newsItems.filter(
     (n) => state.newsFilter === "all" || n.source === state.newsFilter);
 
-  // "Für dich": Artikel, die zu den persönlichen Themen passen
-  const topics = state.settings.topics.map((t) => t.toLowerCase());
-  const forYou = topics.length
-    ? items.filter((n) =>
-        topics.some((t) => (n.title + " " + n.desc).toLowerCase().includes(t))).slice(0, 10)
-    : [];
-  const wrap = $("#news-foryou-wrap");
+  // Vorschau-Zeile "Für dich" oberhalb der Liste (bei Treffern)
+  const forYou = hasTopics ? items.filter(matchesTopics).slice(0, 10) : [];
   wrap.classList.toggle("hidden", !forYou.length);
   $("#news-foryou").innerHTML = forYou.map((n) => newsCardHtml(n)).join("");
 
@@ -1127,13 +1248,16 @@ const CHAT_SYSTEM_PROMPT =
   "Halte Antworten kompakt, außer eine ausführliche Antwort ist nötig.";
 
 const CHAT_PROVIDERS = [
+  { id: "fast", label: "Schnell (gratis)", type: "pollinations", model: "openai-fast" },
   { id: "gpt", label: "GPT (gratis)", type: "pollinations", model: "openai" },
   { id: "mistral", label: "Mistral (gratis)", type: "pollinations", model: "mistral" },
   { id: "claude", label: "Claude", type: "anthropic", model: "claude-sonnet-5", keyName: "anthropicKey" },
   { id: "chatgpt", label: "ChatGPT", type: "openai", model: "gpt-4o-mini", keyName: "openaiKey" },
 ];
 
-state.chat = LS.get("nexus_chat", { provider: "gpt", messages: [] });
+state.chat = LS.get("nexus_chat", { provider: "fast", messages: [] });
+// Einmalige Migration: das schnelle Modell ist jetzt Standard
+if (!state.chat.v2) { state.chat.v2 = true; if (state.chat.provider === "gpt") state.chat.provider = "fast"; }
 const saveChat = () => LS.set("nexus_chat", state.chat);
 let chatBusy = false;
 
@@ -1202,9 +1326,11 @@ function renderChat() {
   box.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
 }
 
-/* OpenAI-kompatibler Endpunkt mit Streaming (Pollinations & OpenAI) */
-async function chatOpenAiCompatible(url, headers, model, messages, onDelta) {
-  const res = await fetchWithTimeout(url, 90000, {
+/* OpenAI-kompatibler Endpunkt mit Streaming (Pollinations & OpenAI).
+   Ein Wächter bricht ab, wenn 15 s lang nichts mehr ankommt — dann wird
+   der Teiltext verwendet oder der nächste Fallback probiert. */
+async function chatOpenAiCompatible(url, headers, model, messages, onDelta, headerTimeout = 20000) {
+  const res = await fetchWithTimeout(url, headerTimeout, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify({ model, messages, stream: true }),
@@ -1219,26 +1345,45 @@ async function chatOpenAiCompatible(url, headers, model, messages, onDelta) {
   }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
-  let buf = "", full = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop();
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t.startsWith("data:")) continue;
-      const payload = t.slice(5).trim();
-      if (payload === "[DONE]") continue;
-      try {
-        const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
-        if (delta) { full += delta; onDelta(full); }
-      } catch {}
+  let buf = "", full = "", lastActivity = Date.now();
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastActivity > 15000) reader.cancel().catch(() => {});
+  }, 2000);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      lastActivity = Date.now();
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith("data:")) continue;
+        const payload = t.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
+          if (delta) { full += delta; onDelta(full); }
+        } catch {}
+      }
     }
+  } finally {
+    clearInterval(watchdog);
   }
   if (!full) throw new Error("Leere Antwort");
   return full;
+}
+
+/* Einfacher GET-Endpunkt von Pollinations als schneller Fallback */
+async function pollinationsGet(model, history) {
+  const last = [...history].reverse().find((m) => m.role === "user")?.content || "";
+  const text = await fetchText(
+    `https://text.pollinations.ai/${encodeURIComponent(last.slice(0, 800))}` +
+    `?model=${model}&system=${encodeURIComponent(CHAT_SYSTEM_PROMPT.slice(0, 200))}`,
+    { timeout: 25000 });
+  if (!text || text.length < 2 || text.trimStart().startsWith("<")) throw new Error("Leere Antwort");
+  return text;
 }
 
 async function chatAnthropic(model, messages) {
@@ -1266,7 +1411,7 @@ async function requestChatReply(onDelta) {
   const p = chatProvider();
   const history = state.chat.messages
     .filter((m) => !m.error)
-    .slice(-16)
+    .slice(-12)
     .map((m) => ({ role: m.role, content: m.content }));
 
   if (p.type === "anthropic") return chatAnthropic(p.model, history);
@@ -1274,21 +1419,20 @@ async function requestChatReply(onDelta) {
   const messages = [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...history];
   if (p.type === "openai") {
     return chatOpenAiCompatible("https://api.openai.com/v1/chat/completions",
-      { authorization: `Bearer ${state.settings.openaiKey}` }, p.model, messages, onDelta);
+      { authorization: `Bearer ${state.settings.openaiKey}` }, p.model, messages, onDelta, 45000);
   }
-  // Pollinations (kostenlos, ohne Konto)
-  try {
-    return await chatOpenAiCompatible("https://text.pollinations.ai/openai", {},
-      p.model, messages, onDelta);
-  } catch (err) {
-    // Fallback: einfacher GET-Endpunkt
-    const last = history[history.length - 1]?.content || "";
-    const text = await fetchText(
-      `https://text.pollinations.ai/${encodeURIComponent(last.slice(0, 800))}?model=${p.model}&system=${encodeURIComponent(CHAT_SYSTEM_PROMPT.slice(0, 200))}`,
-      { timeout: 60000 });
-    if (!text || text.length < 2) throw err;
-    return text;
+
+  // Pollinations (kostenlos): Streaming → GET-Fallback → schnellstes Modell
+  const attempts = [
+    () => chatOpenAiCompatible("https://text.pollinations.ai/openai", {}, p.model, messages, onDelta),
+    () => pollinationsGet(p.model, history),
+    () => pollinationsGet(p.model === "openai-fast" ? "mistral" : "openai-fast", history),
+  ];
+  let lastErr;
+  for (const attempt of attempts) {
+    try { return await attempt(); } catch (err) { lastErr = err; }
   }
+  throw lastErr || new Error("Dienst nicht erreichbar");
 }
 
 async function sendChatMessage(text) {
@@ -1723,7 +1867,21 @@ const switchSyncs = [
   bindSwitch("#set-autoplay", "autoplay"),
   bindSwitch("#set-autorefresh", "autoRefresh"),
   bindSwitch("#set-shake", "shakeUndo"),
+  bindSwitch("#set-weather-show", "weatherShow", () => { weatherLoadedAt = 0; loadWeather(true); }),
 ];
+
+/* Wetter-Ort ändern (mit Geocoding-Suche) */
+$("#set-weather-city").addEventListener("change", async () => {
+  const q = $("#set-weather-city").value.trim();
+  if (!q) return;
+  try {
+    const hit = await setWeatherCity(q);
+    $("#set-weather-city").value = hit.name;
+    toast(`Wetter-Ort: ${hit.name}${hit.country ? ", " + hit.country : ""}`);
+  } catch {
+    toast("Ort nicht gefunden — bitte anders schreiben.");
+  }
+});
 
 function renderSourceToggles() {
   const box = $("#settings-sources");
@@ -1806,6 +1964,7 @@ function syncSettingsUi() {
     d.classList.toggle("active", d.dataset.accent === state.settings.accent));
   $("#set-anthropic-key").value = state.settings.anthropicKey || "";
   $("#set-openai-key").value = state.settings.openaiKey || "";
+  $("#set-weather-city").value = state.settings.weatherPlace?.name || "";
   renderSourceToggles();
   renderTopics();
 }

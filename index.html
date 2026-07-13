@@ -67,6 +67,7 @@
         <h2>Nachrichten</h2>
         <span class="view-meta" id="news-updated"></span>
       </div>
+      <div id="weather-wrap"></div>
       <div class="chip-row" id="news-chips" role="tablist" aria-label="Quellen"></div>
       <div id="news-foryou-wrap" class="foryou-wrap hidden">
         <h3 class="section-label">Für dich</h3>
@@ -384,6 +385,18 @@
           <label class="list-row">
             <span>Autoplay im Player</span>
             <input type="checkbox" class="switch" id="set-autoplay" checked>
+          </label>
+        </div>
+
+        <h3 class="section-label">Wetter</h3>
+        <div class="glass card list-card">
+          <label class="list-row">
+            <span>Wetter anzeigen</span>
+            <input type="checkbox" class="switch" id="set-weather-show" checked>
+          </label>
+          <label class="field" style="margin:10px 14px">
+            <span>Ort</span>
+            <input type="text" id="set-weather-city" placeholder="z. B. München" autocomplete="off">
           </label>
         </div>
 

@@ -261,6 +261,58 @@ main {
 @keyframes shimmer { to { background-position: -200% 0; } }
 
 /* ==========================================================================
+   Wetter
+   ========================================================================== */
+.weather-card { padding: 16px; margin-bottom: 14px; }
+.weather-now { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.weather-main { display: flex; flex-direction: column; gap: 2px; }
+.weather-temp { font-size: 40px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.weather-desc { font-size: 13.5px; color: var(--text-2); margin-top: 6px; }
+.weather-sub { font-size: 12px; color: var(--text-3); }
+.weather-city {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  font-size: 13px; font-weight: 600;
+}
+.weather-hours {
+  display: flex; gap: 4px;
+  overflow-x: auto;
+  margin-top: 14px;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.weather-hours::-webkit-scrollbar { display: none; }
+.weather-hour {
+  flex: none; min-width: 52px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 4px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+.weather-hour span:first-child { color: var(--text-3); font-size: 11px; }
+.weather-hour .wi { font-size: 17px; }
+.weather-hour strong { font-variant-numeric: tabular-nums; }
+.weather-days {
+  display: flex; flex-direction: column;
+  margin-top: 10px;
+  border-top: 1px solid var(--stroke-soft);
+  padding-top: 6px;
+}
+.weather-day {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 2px;
+  font-size: 13.5px;
+}
+.weather-day .wd-name { width: 42px; color: var(--text-2); font-weight: 600; }
+.weather-day .wi { width: 30px; text-align: center; font-size: 16px; }
+.weather-day .wd-desc { flex: 1; color: var(--text-3); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-day .wd-temp { font-variant-numeric: tabular-nums; font-weight: 650; }
+.weather-day .wd-temp small { color: var(--text-3); font-weight: 500; }
+
+/* ==========================================================================
    News
    ========================================================================== */
 .news-list { display: flex; flex-direction: column; gap: 14px; }
