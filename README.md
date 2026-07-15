@@ -1,6 +1,6 @@
 # Nexus 🌐
 
-**News · Finanzen · Videos · Aufgaben — alles in einer App.**
+**News · Sport · Videos · Quiz · Aufgaben — alles in einer App.**
 
 Eine minimalistische, professionelle Web-App im Stil von Apples Liquid-Glass-Design:
 schwarzer Hintergrund, Glas-Oberflächen, dezente Akzente. Kein Framework, kein
@@ -37,11 +37,12 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - **Personalisierung:** eigene Themen anlegen → passende Artikel erscheinen unter „Für dich“
 - Aktualisiert sich bei jedem Öffnen der App automatisch
 
-### 📈 Finanzen
-- Indizes & Rohstoffe (DAX, EURO STOXX 50, S&P 500, Nasdaq, Gold, Öl) mit Sparklines
-- Top-Kryptowährungen mit 7-Tage-Verlauf (CoinGecko)
-- Devisenkurse der EZB (Frankfurter API)
-- Wirtschaftsnachrichten der tagesschau
+### ⚽ Sport (Live-Fußball)
+- Live-Ergebnisse, Spieltag und komplette Tabelle für **Bundesliga,
+  2. Bundesliga und 3. Liga** (OpenLigaDB, kostenlos, ohne Anmeldung)
+- Laufende Spiele mit „Live“-Kennzeichnung, Tabellenzonen farblich markiert
+  (Champions League / Europa League / Abstieg bzw. Auf-/Abstieg)
+- Aktualisiert sich beim Öffnen automatisch
 
 ### ▶️ Videos
 - YouTube-Suche mit **Live-Suchvorschlägen**, Tastatursteuerung inklusive
@@ -50,13 +51,12 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
 
-### 💬 KI-Chat
-- Eigener Chat-Tab mit KI-Assistent „Nexi“
-- **Kostenlos ohne Konto** über Pollinations.ai (GPT- und Mistral-Modelle),
-  mit Live-Streaming der Antworten und Markdown-Darstellung (Code, fett)
-- Optional: eigener API-Schlüssel in den Einstellungen → direkter Chat mit
-  **Claude** (Anthropic) oder **ChatGPT** (OpenAI); Schlüssel bleiben lokal
-- Verlauf wird gespeichert, „Neuer Chat“ und Löschen in den Einstellungen
+### 🧠 Quiz
+- Eigener Quiz-Tab: **Thema eingeben → die KI erstellt online ein Quiz** dazu
+  (kostenlos über Pollinations.ai, ohne Konto)
+- Multiple-Choice mit sofortiger Auflösung, Erklärung je Frage, Fortschrittsbalken
+- Schwierigkeit (Einfach/Mittel/Schwer) und Fragenanzahl (5/8/10) wählbar
+- Ergebnis mit Bewertung und Frage-für-Frage-Rückblick; letztes Ergebnis wird gemerkt
 
 ### 🔖 Merkliste
 - Artikel und Videos mit einem Tipp merken (Lesezeichen-Symbol in Reader/Player)

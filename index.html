@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="Nexus — Nachrichten, Finanzen und Videos. Ein Ort für alles.">
+  <meta name="description" content="Nexus — Nachrichten, Sport, Videos und Quiz. Ein Ort für alles.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Nexus — News · Finanzen · Videos</title>
+  <title>Nexus — News · Sport · Videos</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -42,7 +42,7 @@
       </svg>
       <div class="brand-text">
         <span class="brand-name">Nexus</span>
-        <span class="brand-sub" id="header-sub">News · Finanzen · Videos</span>
+        <span class="brand-sub" id="header-sub">News · Sport · Videos</span>
       </div>
     </div>
     <div class="header-actions">
@@ -82,30 +82,28 @@
       <p class="footnote">Quellen: tagesschau, ZDFheute, ZEIT ONLINE, WELT — geprüfte Redaktionen, keine sonstigen Quellen.</p>
     </section>
 
-    <!-- ===== Finanzen ===== -->
-    <section class="view" id="view-finance" data-view="finance">
+    <!-- ===== Sport (Live-Fußball) ===== -->
+    <section class="view" id="view-sport" data-view="sport">
       <div class="view-head">
-        <h2>Finanzen</h2>
-        <span class="view-meta" id="finance-updated"></span>
+        <h2>Sport</h2>
+        <span class="view-meta" id="sport-updated"></span>
+      </div>
+      <div class="chip-row" id="sport-leagues"></div>
+
+      <h3 class="section-label" id="sport-matchday-label">Spieltag</h3>
+      <div class="match-list" id="sport-matches">
+        <div class="loader"><div class="spinner"></div><span>Spiele werden geladen …</span></div>
       </div>
 
-      <h3 class="section-label">Indizes &amp; Rohstoffe</h3>
-      <div class="index-scroller" id="finance-indices">
-        <div class="loader"><div class="spinner"></div></div>
+      <h3 class="section-label">Tabelle</h3>
+      <div class="glass card table-card" id="sport-table"></div>
+
+      <div class="empty-state hidden" id="sport-error">
+        <p>Sportdaten konnten nicht geladen werden.</p>
+        <button class="btn btn-secondary" id="sport-retry">Erneut versuchen</button>
       </div>
-
-      <h3 class="section-label">Kryptowährungen</h3>
-      <div class="glass card" id="finance-crypto">
-        <div class="loader"><div class="spinner"></div><span>Kurse werden geladen …</span></div>
-      </div>
-
-      <h3 class="section-label">Devisen · 1 EUR</h3>
-      <div class="fx-grid" id="finance-fx"></div>
-
-      <h3 class="section-label">Wirtschaft — tagesschau</h3>
-      <div class="news-list compact" id="finance-news"></div>
-
-      <p class="footnote">Kursdaten: CoinGecko, Frankfurter (EZB), Yahoo Finance. Keine Anlageberatung.</p>
+      <p class="footnote">Live-Daten: OpenLigaDB — kostenlos &amp; ohne Anmeldung. Ergebnisse aktualisieren
+        sich beim Öffnen. <span id="sport-legend"></span></p>
     </section>
 
     <!-- ===== Videos ===== -->
@@ -133,23 +131,80 @@
       </div>
     </section>
 
-    <!-- ===== KI-Chat ===== -->
-    <section class="view" id="view-chat" data-view="chat">
+    <!-- ===== Quiz ===== -->
+    <section class="view" id="view-quiz" data-view="quiz">
       <div class="view-head">
-        <h2>KI-Chat</h2>
-        <button class="btn btn-secondary small" id="chat-new">Neuer Chat</button>
+        <h2>Quiz</h2>
+        <span class="view-meta" id="quiz-meta"></span>
       </div>
-      <div class="chip-row" id="chat-models"></div>
-      <div class="chat-list" id="chat-list"></div>
-      <form class="chat-input glass" id="chat-form">
-        <input type="text" id="chat-text" placeholder="Frag mich etwas …" maxlength="2000"
-               autocomplete="off" enterkeyhint="send" aria-label="Nachricht">
-        <button type="submit" class="btn btn-primary" id="chat-send" aria-label="Senden">
-          <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
-        </button>
-      </form>
-      <p class="footnote">Kostenloser Modus über Pollinations.ai — ohne Konto. Mit eigenem API-Schlüssel
-        (Einstellungen) chattest du direkt mit Claude oder ChatGPT. Antworten können Fehler enthalten.</p>
+
+      <!-- Startbildschirm -->
+      <div id="quiz-start">
+        <div class="glass card quiz-intro">
+          <div class="quiz-intro-icon">🧠</div>
+          <strong>Quiz zu jedem Thema</strong>
+          <p>Gib ein Thema ein — die KI erstellt dir dazu online ein Quiz mit
+            Multiple-Choice-Fragen. Von „Weltraum“ über „Bundesliga“ bis „Harry Potter“.</p>
+        </div>
+        <form class="quiz-topic glass" id="quiz-form">
+          <input type="text" id="quiz-topic" placeholder="Thema, z. B. Antikes Rom" maxlength="80"
+                 autocomplete="off" enterkeyhint="go" aria-label="Quiz-Thema">
+          <button type="submit" class="btn btn-primary" id="quiz-start-btn" aria-label="Quiz starten">
+            <svg viewBox="0 0 24 24"><path d="m5 3 14 9-14 9z"/></svg>
+          </button>
+        </form>
+        <div class="quiz-suggest" id="quiz-suggest"></div>
+        <div class="quiz-row">
+          <div class="quiz-opt">
+            <span class="quiz-opt-label">Schwierigkeit</span>
+            <div class="segmented" id="seg-quiz-diff">
+              <button data-value="Einfach">Einfach</button>
+              <button data-value="Mittel" class="active">Mittel</button>
+              <button data-value="Schwer">Schwer</button>
+            </div>
+          </div>
+          <div class="quiz-opt">
+            <span class="quiz-opt-label">Fragen</span>
+            <div class="segmented" id="seg-quiz-count">
+              <button data-value="5" class="active">5</button>
+              <button data-value="8">8</button>
+              <button data-value="10">10</button>
+            </div>
+          </div>
+        </div>
+        <div class="quiz-last hidden" id="quiz-last"></div>
+      </div>
+
+      <!-- Ladeansicht -->
+      <div id="quiz-loading" class="hidden">
+        <div class="loader"><div class="spinner"></div><span id="quiz-loading-text">Quiz wird erstellt …</span></div>
+      </div>
+
+      <!-- Spielansicht -->
+      <div id="quiz-play" class="hidden">
+        <div class="quiz-progress">
+          <div class="quiz-progress-bar"><span id="quiz-progress-fill"></span></div>
+          <span class="quiz-progress-text" id="quiz-progress-text"></span>
+        </div>
+        <div class="glass card quiz-question" id="quiz-question"></div>
+        <div class="quiz-options" id="quiz-options"></div>
+        <div class="quiz-explain hidden" id="quiz-explain"></div>
+        <button class="btn btn-primary block hidden" id="quiz-next">Weiter</button>
+      </div>
+
+      <!-- Ergebnis -->
+      <div id="quiz-result" class="hidden">
+        <div class="glass card quiz-result-card">
+          <div class="quiz-result-emoji" id="quiz-result-emoji">🎉</div>
+          <div class="quiz-score" id="quiz-score">0 / 0</div>
+          <div class="quiz-result-text" id="quiz-result-text"></div>
+        </div>
+        <div class="glass card quiz-review" id="quiz-review"></div>
+        <div class="quiz-result-actions">
+          <button class="btn btn-primary block" id="quiz-again">Neues Quiz</button>
+          <button class="btn btn-secondary block" id="quiz-retry-same">Nochmal dasselbe</button>
+        </div>
+      </div>
     </section>
 
     <!-- ===== Aufgaben ===== -->
@@ -273,17 +328,17 @@
       <svg viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V6"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></svg>
       <span>News</span>
     </button>
-    <button class="tab" data-tab="finance" aria-label="Finanzen">
-      <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
-      <span>Finanzen</span>
+    <button class="tab" data-tab="sport" aria-label="Sport">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18M3 12h18M6 6l12 12M18 6 6 18"/></svg>
+      <span>Sport</span>
     </button>
     <button class="tab" data-tab="videos" aria-label="Videos">
       <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 9 5 3-5 3z"/></svg>
       <span>Videos</span>
     </button>
-    <button class="tab" data-tab="chat" aria-label="KI-Chat">
-      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6M9 10h6"/></svg>
-      <span>Chat</span>
+    <button class="tab" data-tab="quiz" aria-label="Quiz">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/></svg>
+      <span>Quiz</span>
     </button>
     <button class="tab" data-tab="todos" aria-label="Aufgaben">
       <svg viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -400,24 +455,6 @@
           </label>
         </div>
 
-        <h3 class="section-label">KI-Chat</h3>
-        <div class="glass card list-card">
-          <label class="field" style="margin:10px 14px">
-            <span>Anthropic-API-Schlüssel (für Claude)</span>
-            <input type="password" id="set-anthropic-key" placeholder="sk-ant-…" autocomplete="off">
-          </label>
-          <label class="field" style="margin:0 14px 10px">
-            <span>OpenAI-API-Schlüssel (für ChatGPT)</span>
-            <input type="password" id="set-openai-key" placeholder="sk-…" autocomplete="off">
-          </label>
-          <button class="list-row danger" id="settings-clear-chat">
-            <span>Chatverlauf löschen</span>
-            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-          </button>
-        </div>
-        <p class="footnote" style="margin-top:6px">Ohne Schlüssel läuft der Chat kostenlos über Pollinations.ai.
-          Schlüssel werden nur lokal auf deinem Gerät gespeichert.</p>
-
         <h3 class="section-label">Aktualisierung</h3>
         <div class="glass card list-card">
           <label class="list-row">
@@ -462,7 +499,7 @@
           </button>
         </div>
 
-        <p class="footnote center">Nexus · Version 1.0 · Alle Daten bleiben auf deinem Gerät.</p>
+        <p class="footnote center">Nexus · Version 2.0 · Alle Daten bleiben auf deinem Gerät.</p>
       </div>
     </div>
   </div>

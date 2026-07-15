@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Nexus — News · Finanzen · Videos · Aufgaben
+   Nexus — News · Sport · Videos · Quiz · Aufgaben
    Vanilla JS, kein Build-Schritt. Alle Daten bleiben lokal (localStorage).
    ========================================================================== */
 "use strict";
@@ -152,10 +152,9 @@ const DEFAULT_SETTINGS = {
   staleMinutes: 5,
   shakeUndo: true,
   shakeSensitivity: "normal", // low | normal | high
-  anthropicKey: "",
-  openaiKey: "",
   weatherShow: true,
   weatherPlace: { name: "Berlin", lat: 52.52, lon: 13.41 },
+  sportLeague: "bl1",
 };
 
 const state = {
@@ -166,7 +165,7 @@ const state = {
   activeTab: "news",
   newsItems: [],
   newsFilter: "all",
-  lastFetch: { news: 0, finance: 0, videos: 0 },
+  lastFetch: { news: 0, sport: 0, videos: 0 },
   undoStack: [],
   videoQuery: "",
 };
@@ -225,7 +224,7 @@ function switchTab(tab) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === tab));
   $$(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   window.scrollTo({ top: 0 });
-  const loaders = { news: loadNews, finance: loadFinance, videos: loadVideos };
+  const loaders = { news: loadNews, sport: loadSport, videos: loadVideos };
   loaders[tab]?.();
 }
 
@@ -244,7 +243,7 @@ function refreshAll(force = false) {
   btn.classList.add("spinning");
   const jobs = [];
   if (force || state.activeTab === "news") jobs.push(loadNews(true));
-  if (force || state.activeTab === "finance") jobs.push(loadFinance(true));
+  if (force || state.activeTab === "sport") jobs.push(loadSport(true));
   if (force || state.activeTab === "videos") jobs.push(loadVideos(true));
   Promise.allSettled(jobs).then(() => btn.classList.remove("spinning"));
 }
@@ -256,9 +255,8 @@ function isStale(section) {
 /* Beim Öffnen / Zurückkehren zur App immer aktualisieren. */
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.settings.autoRefresh) return;
-  if (isStale(state.activeTab === "profile" || state.activeTab === "todos" ? "news" : state.activeTab)) {
-    refreshAll(false);
-  }
+  const section = ["news", "sport", "videos"].includes(state.activeTab) ? state.activeTab : "news";
+  if (isStale(section)) refreshAll(false);
 });
 
 /* ==========================================================================
@@ -819,115 +817,179 @@ function renderBookmarks() {
 }
 
 /* ==========================================================================
-   FINANZEN
+   SPORT — Live-Fußball über OpenLigaDB (kostenlos, ohne Schlüssel)
    ========================================================================== */
-const YAHOO_SYMBOLS = [
-  { sym: "^GDAXI", name: "DAX" },
-  { sym: "^STOXX50E", name: "EURO STOXX 50" },
-  { sym: "^GSPC", name: "S&P 500" },
-  { sym: "^IXIC", name: "Nasdaq" },
-  { sym: "GC=F", name: "Gold (USD)" },
-  { sym: "BZ=F", name: "Öl Brent (USD)" },
+const SPORT_LEAGUES = [
+  { id: "bl1", name: "Bundesliga" },
+  { id: "bl2", name: "2. Bundesliga" },
+  { id: "bl3", name: "3. Liga" },
 ];
 
-function sparklineSvg(values, positive) {
-  if (!values || values.length < 2) return "";
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  const w = 100, h = 30;
-  const pts = values.map((v, i) =>
-    [(i / (values.length - 1)) * w, h - 2 - ((v - min) / span) * (h - 6)]);
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
-  const fill = `${line} L${w} ${h} L0 ${h} Z`;
-  return `<svg class="spark ${positive ? "pos" : "neg"}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <path class="spark-fill" d="${fill}"/><path d="${line}"/></svg>`;
+function currentSeason() {
+  const now = new Date();
+  // Saison startet im Sommer; Juli = Monat 6
+  return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
-async function loadIndices() {
-  const box = $("#finance-indices");
-  const cards = await Promise.all(YAHOO_SYMBOLS.map(async ({ sym, name }) => {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=15m`;
-      const data = await fetchJson(url);
-      const meta = data.chart?.result?.[0]?.meta;
-      if (!meta?.regularMarketPrice) throw new Error("keine Daten");
-      const price = meta.regularMarketPrice;
-      const prev = meta.chartPreviousClose || meta.previousClose || price;
-      const pct = ((price - prev) / prev) * 100;
-      const closes = (data.chart.result[0].indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
-      return `
-        <div class="index-card glass">
-          <span class="index-name">${escapeHtml(name)}</span>
-          <span class="index-value">${nfDE.format(price)}</span>
-          <span class="index-change ${pct >= 0 ? "pos" : "neg"}">
-            ${pct >= 0 ? "+" : ""}${pct.toFixed(2)} %</span>
-          ${sparklineSvg(closes.slice(-40), pct >= 0)}
-        </div>`;
-    } catch { return ""; }
-  }));
-  const html = cards.filter(Boolean).join("");
-  box.innerHTML = html || `<div class="empty-state" style="width:100%"><p>Indizes derzeit nicht verfügbar.</p></div>`;
+function fmtMatchTime(d) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((day - today) / 86400e3);
+  const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  if (diff === 0) return "Heute " + time;
+  if (diff === 1) return "Morgen " + time;
+  if (diff === -1) return "Gestern " + time;
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" }) + " · " + time;
 }
 
-async function loadCrypto() {
-  const box = $("#finance-crypto");
+function matchScore(m) {
+  if (m.matchResults && m.matchResults.length) {
+    const r = m.matchResults.reduce((a, b) => (b.resultTypeID > a.resultTypeID ? b : a));
+    return { s1: r.pointsTeam1, s2: r.pointsTeam2 };
+  }
+  if (m.goals && m.goals.length) {
+    const g = m.goals[m.goals.length - 1];
+    return { s1: g.scoreTeam1, s2: g.scoreTeam2 };
+  }
+  return null;
+}
+
+function teamBlock(team) {
+  const icon = team.teamIconUrl
+    ? `<img src="${escapeHtml(team.teamIconUrl)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+    : `<img alt="" style="visibility:hidden">`;
+  return `<span>${escapeHtml(team.shortName || team.teamName)}</span>${icon}`;
+}
+
+function renderSportLeagues() {
+  $("#sport-leagues").innerHTML = SPORT_LEAGUES.map((l) =>
+    `<button class="chip ${l.id === state.settings.sportLeague ? "active" : ""}" data-league="${l.id}">
+       ${escapeHtml(l.name)}</button>`).join("");
+  $$("#sport-leagues .chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      if (chip.dataset.league === state.settings.sportLeague) return;
+      state.settings.sportLeague = chip.dataset.league;
+      saveSettings();
+      state.lastFetch.sport = 0;
+      $("#sport-matches").innerHTML = `<div class="loader"><div class="spinner"></div><span>Spiele werden geladen …</span></div>`;
+      $("#sport-table").innerHTML = "";
+      loadSport(true);
+    }));
+}
+
+function renderMatches(matches) {
+  const box = $("#sport-matches");
+  if (!matches || !matches.length) {
+    box.innerHTML = `<div class="empty-state"><p>Keine Spiele für diesen Spieltag.</p></div>`;
+    return;
+  }
+  $("#sport-matchday-label").textContent = matches[0]?.group?.groupName || "Spieltag";
+  const now = Date.now();
+  box.innerHTML = matches.map((m) => {
+    const kickoff = new Date(m.matchDateTimeUTC || m.matchDateTime);
+    const score = matchScore(m);
+    const live = !m.matchIsFinished && kickoff.getTime() <= now && now - kickoff.getTime() < 3 * 3600e3;
+    const scoreStr = score ? `${score.s1}:${score.s2}` : "–:–";
+    let center;
+    if (live) {
+      center = `<span class="match-score live">${scoreStr}</span><span class="match-live-tag">Live</span>`;
+    } else if (m.matchIsFinished) {
+      center = `<span class="match-score">${scoreStr}</span><span class="match-time">Beendet</span>`;
+    } else {
+      center = `<span class="match-score">–:–</span><span class="match-time">${fmtMatchTime(kickoff)}</span>`;
+    }
+    return `<div class="match-card glass">
+      <div class="match-team home">${teamBlock(m.team1)}</div>
+      <div class="match-center">${center}</div>
+      <div class="match-team away">${teamBlock(m.team2)}</div>
+    </div>`;
+  }).join("");
+}
+
+function sportZone(league, pos, total) {
+  if (league === "bl1") {
+    if (pos <= 4) return "zone-cl";
+    if (pos <= 6) return "zone-el";
+    if (pos >= total - 2) return "zone-rel";
+    return "";
+  }
+  const promo = league === "bl3" ? 2 : 3;
+  const rel = league === "bl3" ? 3 : 2;
+  if (pos <= promo) return "zone-cl";
+  if (pos >= total - rel + 1) return "zone-rel";
+  return "";
+}
+
+function updateSportLegend(league) {
+  const el = $("#sport-legend");
+  if (!el) return;
+  el.innerHTML = league === "bl1"
+    ? `<span class="zone-dot" style="background:var(--up)"></span>Champions League ·
+       <span class="zone-dot" style="background:#0a84ff"></span>Europa League ·
+       <span class="zone-dot" style="background:var(--down)"></span>Abstieg`
+    : `<span class="zone-dot" style="background:var(--up)"></span>Aufstieg ·
+       <span class="zone-dot" style="background:var(--down)"></span>Abstieg`;
+}
+
+function renderTable(table, league) {
+  const box = $("#sport-table");
+  if (!table || !table.length) {
+    box.innerHTML = `<div class="empty-state"><p>Tabelle noch nicht verfügbar.</p></div>`;
+    return;
+  }
+  const total = table.length;
+  const head = `<div class="table-row head">
+    <span class="pos">#</span><span></span><span class="team">Team</span>
+    <span class="num">Sp</span><span class="num">Diff</span><span class="pts">Pkt</span></div>`;
+  const rows = table.map((t, i) => {
+    const pos = i + 1;
+    const diff = t.goalDiff ?? (t.goals - t.opponentGoals);
+    const icon = t.teamIconUrl
+      ? `<img src="${escapeHtml(t.teamIconUrl)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+      : `<img alt="" style="visibility:hidden">`;
+    return `<div class="table-row ${sportZone(league, pos, total)}">
+      <span class="pos">${pos}</span>
+      ${icon}
+      <span class="team">${escapeHtml(t.shortName || t.teamName)}</span>
+      <span class="num">${t.matches}</span>
+      <span class="num">${diff > 0 ? "+" : ""}${diff}</span>
+      <span class="pts">${t.points}</span>
+    </div>`;
+  }).join("");
+  box.innerHTML = head + rows;
+  updateSportLegend(league);
+}
+
+async function loadSport(force = false) {
+  renderSportLeagues();
+  if (!force && state.lastFetch.sport && !isStale("sport")) return;
+
+  const errBox = $("#sport-error");
+  errBox.classList.add("hidden");
+  const league = state.settings.sportLeague;
+  const season = currentSeason();
+  const matchesBox = $("#sport-matches");
+
   try {
-    const coins = await fetchJson(
-      "https://api.coingecko.com/api/v3/coins/markets?vs_currency=eur&order=market_cap_desc&per_page=8&page=1&sparkline=true&price_change_percentage=24h");
-    box.innerHTML = coins.map((c) => {
-      const pct = c.price_change_percentage_24h ?? 0;
-      const spark = (c.sparkline_in_7d?.price || []).filter(Number.isFinite);
-      const step = Math.max(1, Math.floor(spark.length / 40));
-      return `
-        <div class="asset-row">
-          <img class="asset-icon" src="${escapeHtml(c.image)}" alt="" loading="lazy">
-          <div class="asset-name">
-            <strong>${escapeHtml(c.name)}</strong>
-            <span>${escapeHtml(c.symbol)}</span>
-          </div>
-          ${sparklineSvg(spark.filter((_, i) => i % step === 0), pct >= 0)}
-          <div class="asset-quote">
-            <strong>${fmtCurrency(c.current_price)}</strong>
-            <span class="${pct >= 0 ? "pos" : "neg"}">${pct >= 0 ? "+" : ""}${pct.toFixed(2)} %</span>
-          </div>
-        </div>`;
-    }).join("");
+    const [matches, table] = await Promise.all([
+      fetchJson(`https://api.openligadb.de/getmatchdata/${league}`, { timeout: 11000 }),
+      fetchJson(`https://api.openligadb.de/getbltable/${league}/${season}`, { timeout: 11000 }),
+    ]);
+    state.lastFetch.sport = Date.now();
+    $("#sport-updated").textContent = `Stand ${fmtClock()}`;
+    renderMatches(matches);
+    renderTable(table, league);
   } catch {
-    box.innerHTML = `<div class="empty-state"><p>Krypto-Kurse derzeit nicht verfügbar.</p></div>`;
+    if (!matchesBox.querySelector(".match-card")) {
+      matchesBox.innerHTML = "";
+      errBox.classList.remove("hidden");
+    } else {
+      toast("Sport konnte nicht aktualisiert werden.");
+    }
   }
 }
 
-async function loadFx() {
-  const box = $("#finance-fx");
-  try {
-    const data = await fetchJson("https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,CHF,JPY,SEK,PLN");
-    const names = { USD: "US-Dollar", GBP: "Brit. Pfund", CHF: "Franken", JPY: "Yen", SEK: "Kronen", PLN: "Złoty" };
-    box.innerHTML = Object.entries(data.rates).map(([cur, rate]) => `
-      <div class="fx-card glass">
-        <span>${escapeHtml(names[cur] || cur)} · ${cur}</span>
-        <strong>${nfDE.format(rate)}</strong>
-      </div>`).join("");
-  } catch {
-    box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>Devisenkurse derzeit nicht verfügbar.</p></div>`;
-  }
-}
-
-async function loadFinanceNews() {
-  const box = $("#finance-news");
-  try {
-    const items = await fetchTagesschau(NEWS_SOURCES.tagesschau, "tagesschau", "wirtschaft");
-    box.innerHTML = items.slice(0, 6).map((n) => newsCardHtml(n, { row: true })).join("");
-  } catch {
-    box.innerHTML = "";
-  }
-}
-
-async function loadFinance(force = false) {
-  if (!force && state.lastFetch.finance && !isStale("finance")) return;
-  state.lastFetch.finance = Date.now();
-  $("#finance-updated").textContent = `Stand ${fmtClock()}`;
-  await Promise.allSettled([loadIndices(), loadCrypto(), loadFx(), loadFinanceNews()]);
-}
+$("#sport-retry").addEventListener("click", () => loadSport(true));
 
 /* ==========================================================================
    VIDEOS — YouTube-Suche & In-App-Player
@@ -1240,270 +1302,241 @@ function renderVideoChips(activeQuery = "__trending") {
 $("#videos-retry").addEventListener("click", () => loadVideos(true));
 
 /* ==========================================================================
-   KI-CHAT — kostenlos über Pollinations, optional Claude/ChatGPT per API-Key
+   QUIZ — Thema eingeben, KI erstellt online ein Quiz (Pollinations, gratis)
    ========================================================================== */
-const CHAT_SYSTEM_PROMPT =
-  "Du bist Nexi, der KI-Assistent der Nexus-App (Nachrichten, Finanzen, Videos, Aufgaben). " +
-  "Antworte hilfreich, korrekt und auf Deutsch, außer der Nutzer schreibt in einer anderen Sprache. " +
-  "Halte Antworten kompakt, außer eine ausführliche Antwort ist nötig.";
-
-const CHAT_PROVIDERS = [
-  { id: "fast", label: "Schnell (gratis)", type: "pollinations", model: "openai-fast" },
-  { id: "gpt", label: "GPT (gratis)", type: "pollinations", model: "openai" },
-  { id: "mistral", label: "Mistral (gratis)", type: "pollinations", model: "mistral" },
-  { id: "claude", label: "Claude", type: "anthropic", model: "claude-sonnet-5", keyName: "anthropicKey" },
-  { id: "chatgpt", label: "ChatGPT", type: "openai", model: "gpt-4o-mini", keyName: "openaiKey" },
+const QUIZ_SUGGESTIONS = [
+  "Weltraum", "Bundesliga", "Deutsche Geschichte", "Harry Potter",
+  "Hauptstädte", "Naturwissenschaft", "Musik der 2000er", "Antikes Rom",
 ];
 
-state.chat = LS.get("nexus_chat", { provider: "fast", messages: [] });
-// Einmalige Migration: das schnelle Modell ist jetzt Standard
-if (!state.chat.v2) { state.chat.v2 = true; if (state.chat.provider === "gpt") state.chat.provider = "fast"; }
-const saveChat = () => LS.set("nexus_chat", state.chat);
-let chatBusy = false;
+state.quiz = {
+  diff: "Mittel",
+  count: 5,
+  data: null,       // { topic, questions: [{q, options, correct, explain}] }
+  current: 0,
+  answers: [],      // gewählter Index je Frage
+  running: false,
+};
+let quizLast = LS.get("nexus_quiz", null); // { topic, score, total, diff, at }
 
-function chatProvider() {
-  return CHAT_PROVIDERS.find((p) => p.id === state.chat.provider) || CHAT_PROVIDERS[0];
-}
-
-function providerAvailable(p) {
-  return !p.keyName || !!state.settings[p.keyName];
-}
-
-/* --- Mini-Markdown (Codeblöcke, Inline-Code, fett) --- */
-function mdToHtml(text) {
-  const parts = String(text).split("```");
-  return parts.map((part, i) => {
-    if (i % 2 === 1) {
-      const code = part.replace(/^[a-zA-Z0-9_-]*\n/, "");
-      return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
-    }
-    return escapeHtml(part)
-      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\n/g, "<br>");
-  }).join("");
-}
-
-function renderChatModels() {
-  $("#chat-models").innerHTML = CHAT_PROVIDERS.map((p) => {
-    const locked = !providerAvailable(p);
-    return `<button class="chip ${p.id === state.chat.provider ? "active" : ""}"
-      data-provider="${p.id}">${escapeHtml(p.label)}${locked ? '<span class="lock">🔒</span>' : ""}</button>`;
-  }).join("");
-  $$("#chat-models .chip").forEach((chip) =>
-    chip.addEventListener("click", () => {
-      const p = CHAT_PROVIDERS.find((x) => x.id === chip.dataset.provider);
-      if (!providerAvailable(p)) {
-        toast(`Hinterlege zuerst deinen ${p.type === "anthropic" ? "Anthropic" : "OpenAI"}-API-Schlüssel in den Einstellungen.`);
-        openModal("settings");
-        return;
-      }
-      state.chat.provider = p.id;
-      saveChat();
-      renderChatModels();
-    }));
-}
-
-function renderChat() {
-  const box = $("#chat-list");
-  if (!state.chat.messages.length) {
-    box.innerHTML = `<div class="chat-empty glass card">
-      <strong>Hallo! 👋</strong>
-      Ich bin Nexi. Frag mich nach Nachrichten, erklär dir Finanzbegriffe,
-      lass dir Ideen geben — oder einfach plaudern.</div>`;
-    return;
-  }
-  box.innerHTML = state.chat.messages.map((m, i) => {
-    if (m.role === "user")
-      return `<div class="chat-msg user">${escapeHtml(m.content)}</div>`;
-    if (m.error)
-      return `<div class="chat-msg assistant error" data-retry="${i}">${escapeHtml(m.content)}<br><small>Antippen zum erneuten Versuchen</small></div>`;
-    return `<div class="chat-msg assistant">${mdToHtml(m.content)}
-      ${m.model ? `<span class="chat-model-tag">${escapeHtml(m.model)}</span>` : ""}</div>`;
-  }).join("");
-  $$("[data-retry]", box).forEach((el) =>
-    el.addEventListener("click", () => retryChat(Number(el.dataset.retry))));
-  box.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
-}
-
-/* OpenAI-kompatibler Endpunkt mit Streaming (Pollinations & OpenAI).
-   Ein Wächter bricht ab, wenn 15 s lang nichts mehr ankommt — dann wird
-   der Teiltext verwendet oder der nächste Fallback probiert. */
-async function chatOpenAiCompatible(url, headers, model, messages, onDelta, headerTimeout = 20000) {
-  const res = await fetchWithTimeout(url, headerTimeout, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify({ model, messages, stream: true }),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const type = res.headers.get("content-type") || "";
-  if (!type.includes("event-stream")) {
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content;
-    if (!text) throw new Error("Leere Antwort");
-    return text;
-  }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "", full = "", lastActivity = Date.now();
-  const watchdog = setInterval(() => {
-    if (Date.now() - lastActivity > 15000) reader.cancel().catch(() => {});
-  }, 2000);
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      lastActivity = Date.now();
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop();
-      for (const line of lines) {
-        const t = line.trim();
-        if (!t.startsWith("data:")) continue;
-        const payload = t.slice(5).trim();
-        if (payload === "[DONE]") continue;
-        try {
-          const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
-          if (delta) { full += delta; onDelta(full); }
-        } catch {}
-      }
-    }
-  } finally {
-    clearInterval(watchdog);
-  }
-  if (!full) throw new Error("Leere Antwort");
-  return full;
-}
-
-/* Einfacher GET-Endpunkt von Pollinations als schneller Fallback */
-async function pollinationsGet(model, history) {
-  const last = [...history].reverse().find((m) => m.role === "user")?.content || "";
-  const text = await fetchText(
-    `https://text.pollinations.ai/${encodeURIComponent(last.slice(0, 800))}` +
-    `?model=${model}&system=${encodeURIComponent(CHAT_SYSTEM_PROMPT.slice(0, 200))}`,
-    { timeout: 25000 });
-  if (!text || text.length < 2 || text.trimStart().startsWith("<")) throw new Error("Leere Antwort");
-  return text;
-}
-
-async function chatAnthropic(model, messages) {
-  const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", 90000, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": state.settings.anthropicKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({ model, max_tokens: 1500, system: CHAT_SYSTEM_PROMPT, messages }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
-  const data = await res.json();
-  const text = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
-  if (!text) throw new Error("Leere Antwort");
-  return text;
-}
-
-async function requestChatReply(onDelta) {
-  const p = chatProvider();
-  const history = state.chat.messages
-    .filter((m) => !m.error)
-    .slice(-12)
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  if (p.type === "anthropic") return chatAnthropic(p.model, history);
-
-  const messages = [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...history];
-  if (p.type === "openai") {
-    return chatOpenAiCompatible("https://api.openai.com/v1/chat/completions",
-      { authorization: `Bearer ${state.settings.openaiKey}` }, p.model, messages, onDelta, 45000);
-  }
-
-  // Pollinations (kostenlos): Streaming → GET-Fallback → schnellstes Modell
-  const attempts = [
-    () => chatOpenAiCompatible("https://text.pollinations.ai/openai", {}, p.model, messages, onDelta),
-    () => pollinationsGet(p.model, history),
-    () => pollinationsGet(p.model === "openai-fast" ? "mistral" : "openai-fast", history),
-  ];
+/* --- KI-Textgenerierung über Pollinations (POST, GET-Fallback) --- */
+async function aiGenerate(system, user, { timeout = 45000 } = {}) {
+  const models = ["openai", "openai-fast", "mistral"];
+  const messages = [{ role: "system", content: system }, { role: "user", content: user }];
   let lastErr;
-  for (const attempt of attempts) {
-    try { return await attempt(); } catch (err) { lastErr = err; }
+  for (const model of models) {
+    try {
+      const res = await fetchWithTimeout("https://text.pollinations.ai/openai", timeout, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, messages, temperature: 0.75, seed: Math.floor(Math.random() * 1e6) }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content;
+      if (!text || text.length < 5) throw new Error("Leere Antwort");
+      return text;
+    } catch (err) { lastErr = err; }
   }
-  throw lastErr || new Error("Dienst nicht erreichbar");
+  // GET-Fallback (JSON-Modus von Pollinations)
+  const text = await fetchText(
+    `https://text.pollinations.ai/${encodeURIComponent(user)}?model=openai&json=true`,
+    { timeout });
+  if (!text) throw lastErr || new Error("Dienst nicht erreichbar");
+  return text;
 }
 
-async function sendChatMessage(text) {
-  if (chatBusy) { toast("Einen Moment — ich antworte noch."); return; }
-  chatBusy = true;
-  $("#chat-send").disabled = true;
+/* Robustes Herauslösen des JSON-Objekts aus der KI-Antwort */
+function parseQuizJson(raw) {
+  let text = String(raw).trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1) text = text.slice(start, end + 1);
+  const obj = JSON.parse(text);
+  const questions = (obj.questions || obj.fragen || [])
+    .map((q) => ({
+      q: String(q.q || q.frage || q.question || "").trim(),
+      options: (q.options || q.answers || q.antworten || []).map((o) => String(o).trim()),
+      correct: Number(q.correct ?? q.correctIndex ?? q.richtig ?? 0),
+      explain: String(q.explain || q.explanation || q.erklaerung || q.erklärung || "").trim(),
+    }))
+    .filter((q) => q.q && q.options.length === 4 && q.correct >= 0 && q.correct <= 3);
+  if (!questions.length) throw new Error("Keine gültigen Fragen");
+  return questions;
+}
 
-  const p = chatProvider();
-  state.chat.messages.push({ role: "user", content: text });
-  renderChat();
+/* --- Ansichten umschalten --- */
+function showQuizView(which) {
+  ["start", "loading", "play", "result"].forEach((v) =>
+    $(`#quiz-${v}`).classList.toggle("hidden", v !== which));
+}
 
-  // Tipp-Indikator anhängen
-  const box = $("#chat-list");
-  const pending = document.createElement("div");
-  pending.className = "chat-msg assistant";
-  pending.innerHTML = `<span class="typing"><i></i><i></i><i></i></span>`;
-  box.appendChild(pending);
-  pending.scrollIntoView({ block: "end" });
+function renderQuizStart() {
+  $("#quiz-suggest").innerHTML = QUIZ_SUGGESTIONS.map((s) =>
+    `<button class="chip" data-topic="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("");
+  $$("#quiz-suggest .chip").forEach((chip) =>
+    chip.addEventListener("click", () => { $("#quiz-topic").value = chip.dataset.topic; startQuiz(); }));
+
+  const box = $("#quiz-last");
+  if (quizLast) {
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div class="quiz-last-info">
+        <strong>Zuletzt: ${escapeHtml(quizLast.topic)}</strong>
+        <span>${quizLast.score} / ${quizLast.total} richtig · ${escapeHtml(quizLast.diff)} · ${timeAgo(quizLast.at)}</span>
+      </div>
+      <button class="btn btn-secondary small" id="quiz-repeat-last">Nochmal</button>`;
+    $("#quiz-repeat-last").addEventListener("click", () => {
+      $("#quiz-topic").value = quizLast.topic;
+      startQuiz();
+    });
+  } else {
+    box.classList.add("hidden");
+  }
+  showQuizView("start");
+}
+
+async function startQuiz() {
+  if (state.quiz.running) return;
+  const topic = $("#quiz-topic").value.trim();
+  if (topic.length < 2) { toast("Bitte gib ein Thema ein."); return; }
+
+  state.quiz.diff = $("#seg-quiz-diff .active")?.dataset.value || "Mittel";
+  state.quiz.count = Number($("#seg-quiz-count .active")?.dataset.value || 5);
+  state.quiz.running = true;
+  $("#quiz-loading-text").textContent = `Quiz zu „${topic}“ wird erstellt …`;
+  showQuizView("loading");
+
+  const system = "Du bist ein Quizmaster. Du erstellst faktisch korrekte Multiple-Choice-Quizfragen. " +
+    "Antworte AUSSCHLIESSLICH mit gültigem JSON – kein Markdown, kein Text davor oder danach.";
+  const user =
+    `Erstelle ein Quiz auf Deutsch zum Thema "${topic}". ` +
+    `Schwierigkeit: ${state.quiz.diff}. Genau ${state.quiz.count} Fragen. ` +
+    `Jede Frage hat genau 4 Antwortoptionen, davon genau eine richtig. ` +
+    `Gib das Ergebnis exakt in diesem JSON-Format zurück: ` +
+    `{"questions":[{"q":"Fragetext","options":["Option A","Option B","Option C","Option D"],"correct":0,"explain":"Kurze Erklärung in einem Satz"}]}. ` +
+    `"correct" ist der 0-basierte Index der richtigen Option.`;
 
   try {
-    const reply = await requestChatReply((partial) => {
-      pending.innerHTML = mdToHtml(partial);
-    });
-    state.chat.messages.push({ role: "assistant", content: reply, model: p.label });
-  } catch (err) {
-    state.chat.messages.push({
-      role: "assistant", error: true,
-      content: `Antwort fehlgeschlagen (${err.message || "Netzwerkfehler"}).`,
-    });
+    const raw = await aiGenerate(system, user);
+    const questions = parseQuizJson(raw).slice(0, state.quiz.count);
+    state.quiz.data = { topic, questions };
+    state.quiz.current = 0;
+    state.quiz.answers = [];
+    renderQuizQuestion();
+    showQuizView("play");
+  } catch {
+    toast("Quiz konnte nicht erstellt werden — bitte erneut versuchen.");
+    showQuizView("start");
   } finally {
-    if (state.chat.messages.length > 60) state.chat.messages.splice(0, state.chat.messages.length - 60);
-    saveChat();
-    chatBusy = false;
-    $("#chat-send").disabled = false;
-    renderChat();
+    state.quiz.running = false;
   }
 }
 
-function retryChat(errorIndex) {
-  if (chatBusy) return;
-  // Fehlermeldung entfernen und die letzte Nutzerfrage erneut senden
-  const userMsg = state.chat.messages[errorIndex - 1];
-  if (!userMsg || userMsg.role !== "user") return;
-  state.chat.messages.splice(errorIndex - 1, 2);
-  saveChat();
-  renderChat();
-  sendChatMessage(userMsg.content);
+function renderQuizQuestion() {
+  const { data, current } = state.quiz;
+  const q = data.questions[current];
+  $("#quiz-meta").textContent = data.topic;
+  $("#quiz-progress-text").textContent = `${current + 1} / ${data.questions.length}`;
+  $("#quiz-progress-fill").style.width = `${(current / data.questions.length) * 100}%`;
+  $("#quiz-question").textContent = q.q;
+  $("#quiz-explain").classList.add("hidden");
+  $("#quiz-next").classList.add("hidden");
+
+  const letters = ["A", "B", "C", "D"];
+  $("#quiz-options").innerHTML = q.options.map((opt, i) => `
+    <button class="quiz-option" data-opt="${i}">
+      <span class="opt-letter">${letters[i]}</span>
+      <span class="opt-text">${escapeHtml(opt)}</span>
+    </button>`).join("");
+  $$("#quiz-options .quiz-option").forEach((btn) =>
+    btn.addEventListener("click", () => answerQuiz(Number(btn.dataset.opt))));
 }
 
-$("#chat-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const input = $("#chat-text");
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-  sendChatMessage(text);
+function answerQuiz(choice) {
+  const { data, current } = state.quiz;
+  if (state.quiz.answers[current] != null) return; // schon beantwortet
+  const q = data.questions[current];
+  state.quiz.answers[current] = choice;
+
+  $$("#quiz-options .quiz-option").forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === q.correct) btn.classList.add("correct");
+    else if (i === choice) btn.classList.add("wrong");
+    else btn.classList.add("dim");
+  });
+
+  if (choice === q.correct && navigator.vibrate) navigator.vibrate(40);
+
+  if (q.explain) {
+    const ex = $("#quiz-explain");
+    ex.innerHTML = `<strong>${choice === q.correct ? "Richtig! " : "Leider falsch. "}</strong>${escapeHtml(q.explain)}`;
+    ex.classList.remove("hidden");
+  }
+  const next = $("#quiz-next");
+  next.textContent = current + 1 < data.questions.length ? "Weiter" : "Ergebnis anzeigen";
+  next.classList.remove("hidden");
+}
+
+$("#quiz-next").addEventListener("click", () => {
+  if (state.quiz.current + 1 < state.quiz.data.questions.length) {
+    state.quiz.current++;
+    renderQuizQuestion();
+  } else {
+    finishQuiz();
+  }
 });
 
-$("#chat-new").addEventListener("click", () => {
-  if (chatBusy) return;
-  state.chat.messages = [];
-  saveChat();
-  renderChat();
-  toast("Neuer Chat gestartet.");
+function finishQuiz() {
+  const { data, answers } = state.quiz;
+  const total = data.questions.length;
+  const score = data.questions.reduce((sum, q, i) => sum + (answers[i] === q.correct ? 1 : 0), 0);
+  const pct = score / total;
+
+  const rating = pct === 1
+    ? ["🏆", "Perfekt! Alles richtig!"]
+    : pct >= 0.8 ? ["🎉", "Stark! Fast alles gewusst."]
+    : pct >= 0.5 ? ["👍", "Solide Leistung."]
+    : pct >= 0.3 ? ["🙂", "Da geht noch was!"]
+    : ["📚", "Übung macht den Meister."];
+
+  $("#quiz-result-emoji").textContent = rating[0];
+  $("#quiz-score").textContent = `${score} / ${total}`;
+  $("#quiz-result-text").textContent = `${rating[1]} — Thema: ${data.topic}`;
+
+  const letters = ["A", "B", "C", "D"];
+  $("#quiz-review").innerHTML = data.questions.map((q, i) => {
+    const chosen = answers[i];
+    const ok = chosen === q.correct;
+    return `<div class="quiz-review-item">
+      <div class="quiz-review-q"><span class="mark">${ok ? "✅" : "❌"}</span>${escapeHtml(q.q)}</div>
+      <div class="quiz-review-a">
+        ${ok ? `<span class="good">${escapeHtml(q.options[q.correct])}</span>`
+             : `<span class="bad">${escapeHtml(q.options[chosen] ?? "—")}</span> →
+                <span class="good">${escapeHtml(q.options[q.correct])}</span>`}
+      </div>
+    </div>`;
+  }).join("");
+
+  quizLast = { topic: data.topic, score, total, diff: state.quiz.diff, at: Date.now() };
+  LS.set("nexus_quiz", quizLast);
+  showQuizView("result");
+}
+
+$("#quiz-form").addEventListener("submit", (e) => { e.preventDefault(); startQuiz(); });
+$("#quiz-again").addEventListener("click", () => { $("#quiz-topic").value = ""; renderQuizStart(); });
+$("#quiz-retry-same").addEventListener("click", () => {
+  if (state.quiz.data) { $("#quiz-topic").value = state.quiz.data.topic; startQuiz(); }
 });
 
-$("#settings-clear-chat").addEventListener("click", () => {
-  state.chat.messages = [];
-  saveChat();
-  renderChat();
-  toast("Chatverlauf gelöscht.");
+/* Einfache Segmented-Controls im Quiz (ohne Persistenz) */
+["#seg-quiz-diff", "#seg-quiz-count"].forEach((id) => {
+  const seg = $(id);
+  seg?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    $$("button", seg).forEach((b) => b.classList.toggle("active", b === btn));
+  });
 });
 
 /* ==========================================================================
@@ -1769,7 +1802,7 @@ function exportAllData() {
   downloadJson("nexus-daten.json", {
     exportiert: new Date().toISOString(),
     profil: currentUser() ? { name: currentUser().name, email: currentUser().email } : null,
-    einstellungen: { ...state.settings, anthropicKey: undefined, openaiKey: undefined },
+    einstellungen: state.settings,
     aufgaben: state.todos,
     merkliste: state.bookmarks,
     statistiken: state.stats,
@@ -1801,7 +1834,7 @@ function renderProfile() {
       `Dabei seit ${new Date(user.created).toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
     $("#header-sub").textContent = `Hallo, ${user.name.split(" ")[0]}`;
   } else {
-    $("#header-sub").textContent = "News · Finanzen · Videos";
+    $("#header-sub").textContent = "News · Sport · Videos";
   }
   renderProfileStats();
 }
@@ -1939,7 +1972,8 @@ $("#topic-form").addEventListener("submit", (e) => {
 
 $("#settings-reset").addEventListener("click", () => {
   if (!confirm("Wirklich alles zurücksetzen? Konten, Aufgaben und Einstellungen werden gelöscht.")) return;
-  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users", "nexus_bookmarks", "nexus_chat"]
+  ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users",
+    "nexus_bookmarks", "nexus_chat", "nexus_quiz"]
     .forEach((k) => LS.remove(k));
   Object.keys(localStorage)
     .filter((k) => k.startsWith("nexus_settings_"))
@@ -1947,23 +1981,11 @@ $("#settings-reset").addEventListener("click", () => {
   location.reload();
 });
 
-/* API-Schlüssel für den KI-Chat */
-[["#set-anthropic-key", "anthropicKey"], ["#set-openai-key", "openaiKey"]].forEach(([id, key]) => {
-  $(id).addEventListener("change", () => {
-    state.settings[key] = $(id).value.trim();
-    saveSettings();
-    renderChatModels();
-    if (state.settings[key]) toast("API-Schlüssel gespeichert (nur lokal).");
-  });
-});
-
 function syncSettingsUi() {
   segSyncs.forEach((fn) => fn());
   switchSyncs.forEach((fn) => fn());
   $$("#accent-row .accent-dot").forEach((d) =>
     d.classList.toggle("active", d.dataset.accent === state.settings.accent));
-  $("#set-anthropic-key").value = state.settings.anthropicKey || "";
-  $("#set-openai-key").value = state.settings.openaiKey || "";
   $("#set-weather-city").value = state.settings.weatherPlace?.name || "";
   renderSourceToggles();
   renderTopics();
@@ -1978,12 +2000,11 @@ function boot() {
   renderProfile();
   renderTodos();
   renderBookmarks();
-  renderChatModels();
-  renderChat();
+  renderQuizStart();
   renderVideoChips();
   initShake();
   loadNews(true);           // beim Öffnen immer frisch laden
-  loadFinance(true);
+  loadSport(true);
   loadVideos(true);
 }
 
