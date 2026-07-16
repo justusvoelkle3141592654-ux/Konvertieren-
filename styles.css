@@ -185,6 +185,7 @@ main {
 }
 .view-head h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.6px; }
 .view-meta { font-size: 12px; color: var(--text-3); }
+.view-head-right { display: flex; align-items: center; gap: 12px; }
 
 .section-label {
   font-size: 13px; font-weight: 600;

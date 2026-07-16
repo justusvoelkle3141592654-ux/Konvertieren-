@@ -1053,17 +1053,51 @@ $("#sport-retry").addEventListener("click", () => loadSport(true));
 /* ==========================================================================
    VIDEOS — YouTube-Suche & In-App-Player
    ========================================================================== */
-const PIPED_INSTANCES = [
+/* Öffentliche Piped-/Invidious-Instanzen fallen ständig aus, daher werden sie
+   zur Laufzeit frisch geladen (mit dieser Liste als Reserve). */
+let PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://pipedapi.adminforge.de",
   "https://api.piped.private.coffee",
+  "https://pipedapi.leptons.xyz",
   "https://pipedapi.reallyaweso.me",
+  "https://piped-api.lunar.icu",
 ];
-const INVIDIOUS_INSTANCES = [
+let INVIDIOUS_INSTANCES = [
   "https://inv.nadeko.net",
   "https://invidious.nerdvpn.de",
-  "https://iv.melmac.space",
+  "https://yewtu.be",
+  "https://invidious.jing.rocks",
+  "https://iv.ggtyler.dev",
+  "https://inv.tux.pizza",
 ];
+
+const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+let instancesReady = null;
+
+/* Aktuelle, funktionierende Instanzen dynamisch beziehen. */
+function ensureInstances() {
+  if (instancesReady) return instancesReady;
+  instancesReady = (async () => {
+    await Promise.allSettled([
+      (async () => {
+        const list = await fetchJson("https://piped-instances.kavin.rocks/", { timeout: 6000 });
+        const apis = (list || []).map((i) => i.api_url).filter(Boolean);
+        if (apis.length) PIPED_INSTANCES = uniq([...apis, ...PIPED_INSTANCES]).slice(0, 14);
+      })(),
+      (async () => {
+        const data = await fetchJson(
+          "https://api.invidious.io/instances.json?sort_by=type,health", { timeout: 6000 });
+        const apis = (data || [])
+          .filter((e) => e[1] && e[1].type === "https" && e[1].api !== false)
+          .map((e) => `https://${e[0]}`);
+        if (apis.length) INVIDIOUS_INSTANCES = uniq([...apis, ...INVIDIOUS_INSTANCES]).slice(0, 14);
+        if (apis[0]) altEmbedBase = apis[0];
+      })(),
+    ]);
+  })();
+  return instancesReady;
+}
 
 const VIDEO_CATEGORIES = [
   ["__trending", "Trends"],
@@ -1114,14 +1148,15 @@ function firstFulfilled(promises) {
 let altEmbedBase = INVIDIOUS_INSTANCES[0];
 
 async function searchVideos(query) {
+  await ensureInstances();
   const region = state.settings.videoRegion;
   const attempts = [];
 
-  for (const base of PIPED_INSTANCES) {
+  for (const base of PIPED_INSTANCES.slice(0, 8)) {
     const url = query === "__trending"
       ? `${base}/trending?region=${region}`
       : `${base}/search?q=${encodeURIComponent(query)}&filter=videos`;
-    attempts.push(fetchWithTimeout(url, 7000).then(async (r) => {
+    attempts.push(fetchWithTimeout(url, 8000).then(async (r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       const list = (Array.isArray(data) ? data : data.items || [])
@@ -1132,16 +1167,29 @@ async function searchVideos(query) {
     }));
   }
 
-  for (const base of INVIDIOUS_INSTANCES) {
+  for (const base of INVIDIOUS_INSTANCES.slice(0, 8)) {
     const url = query === "__trending"
       ? `${base}/api/v1/trending?region=${region}`
       : `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&region=${region}`;
-    attempts.push(fetchWithTimeout(url, 7000).then(async (r) => {
+    attempts.push(fetchWithTimeout(url, 8000).then(async (r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const list = (await r.json()).map(normalizeInvidious).filter((v) => v.id);
       if (!list.length) throw new Error("leer");
       return { list, embedBase: base };
     }));
+  }
+
+  // Letzte Absicherung: einige Instanzen über CORS-Proxy (falls direkt geblockt)
+  for (const base of INVIDIOUS_INSTANCES.slice(0, 3)) {
+    const raw = query === "__trending"
+      ? `${base}/api/v1/trending?region=${region}`
+      : `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&region=${region}`;
+    attempts.push((async () => {
+      const text = await fetchText(raw, { direct: false, timeout: 10000 });
+      const list = JSON.parse(text).map(normalizeInvidious).filter((v) => v.id);
+      if (!list.length) throw new Error("leer");
+      return { list, embedBase: base };
+    })());
   }
 
   const { list, embedBase } = await firstFulfilled(attempts);
@@ -1163,7 +1211,8 @@ async function loadVideos(force = false) {
   try {
     const videos = await searchVideos(query);
     state.lastFetch.videos = Date.now();
-    $("#videos-meta").textContent = query === "__trending"
+    const metaEl = $("#videos-meta");
+    if (metaEl) metaEl.textContent = query === "__trending"
       ? `Trends · ${state.settings.videoRegion}` : `${videos.length} Treffer`;
     grid.innerHTML = videos.slice(0, 24).map((v) => `
       <button class="video-card glass" data-video-id="${escapeHtml(v.id)}"
@@ -1270,6 +1319,7 @@ function dedupeByLabel(list) {
 }
 
 async function fetchStreams(id) {
+  await ensureInstances();
   for (const base of PIPED_INSTANCES) {
     try {
       const r = await fetchWithTimeout(`${base}/streams/${encodeURIComponent(id)}`, 8000);
