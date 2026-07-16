@@ -2,10 +2,13 @@ package de.nexus.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Base64;
 import android.view.View;
 import android.view.ViewGroup;
@@ -192,6 +195,37 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 public void run() { startSaveDocument(bytes, name, mime); }
             });
+        }
+
+        /** Video-Download: lädt eine URL per Android-DownloadManager herunter. */
+        @JavascriptInterface
+        public void downloadUrl(final String url, final String filename, final String mime) {
+            runOnUiThread(new Runnable() {
+                public void run() { enqueueDownload(url, filename, mime); }
+            });
+        }
+    }
+
+    private void enqueueDownload(String url, String filename, String mime) {
+        try {
+            if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+                toast("Ungültiger Download-Link.");
+                return;
+            }
+            String name = (filename == null || filename.isEmpty()) ? "video.mp4" : filename;
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+            req.setTitle(name);
+            req.setDescription("Nexus – Download");
+            if (mime != null && !mime.isEmpty()) req.setMimeType(mime);
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
+            req.allowScanningByMediaScanner();
+            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            if (dm == null) { toast("Download nicht verfügbar."); return; }
+            dm.enqueue(req);
+            toast("Download läuft …");
+        } catch (Exception e) {
+            toast("Download fehlgeschlagen.");
         }
     }
 

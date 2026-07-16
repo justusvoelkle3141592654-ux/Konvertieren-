@@ -49,6 +49,9 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - Trends nach Region (DE/AT/CH/US) sowie Kategorie-Chips
 - Videos starten **direkt in der App** (youtube-nocookie-Player) — ohne Account
 - **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
+- **Herunterladen**: Video mit Ton (mehrere Auflösungen) oder nur Audio, per
+  Android-DownloadManager im Hintergrund gespeichert (Stream-Links über
+  Piped/Invidious). Nur für Inhalte nutzen, deren Download erlaubt ist.
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
 
 ### 🔄 Konverter (Datei-Konverter)

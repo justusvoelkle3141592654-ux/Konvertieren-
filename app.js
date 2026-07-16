@@ -1251,6 +1251,114 @@ $("#player-bookmark").addEventListener("click", () => {
   updatePlayerBookmarkBtn();
 });
 
+/* --- Video-Download über Piped-/Invidious-Streams --- */
+function sanitizeFilename(name) {
+  return (String(name || "video").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().slice(0, 80)) || "video";
+}
+function videoExt(mime, audio) {
+  const s = String(mime || "").toLowerCase();
+  if (s.includes("webm")) return "webm";
+  if (s.includes("opus") || s.includes("ogg")) return "opus";
+  return audio ? "m4a" : "mp4";
+}
+function dedupeByLabel(list) {
+  const seen = new Set();
+  return list.filter((s) => (seen.has(s.label) ? false : seen.add(s.label)))
+    .sort((a, b) => (parseInt(b.label) || 0) - (parseInt(a.label) || 0));
+}
+
+async function fetchStreams(id) {
+  for (const base of PIPED_INSTANCES) {
+    try {
+      const r = await fetchWithTimeout(`${base}/streams/${encodeURIComponent(id)}`, 8000);
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const progressive = (d.videoStreams || [])
+        .filter((s) => s.url && s.videoOnly === false)
+        .map((s) => ({ url: s.url, label: s.quality || "Video", mime: s.mimeType || "video/mp4", ext: videoExt(s.mimeType, false) }));
+      const audio = (d.audioStreams || [])
+        .filter((s) => s.url)
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+        .slice(0, 1)
+        .map((s) => ({ url: s.url, label: "Beste Qualität", mime: s.mimeType || "audio/mp4", ext: videoExt(s.mimeType, true) }));
+      if (progressive.length || audio.length) return { progressive: dedupeByLabel(progressive), audio };
+    } catch {}
+  }
+  for (const base of INVIDIOUS_INSTANCES) {
+    try {
+      const r = await fetchWithTimeout(`${base}/api/v1/videos/${encodeURIComponent(id)}`, 8000);
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const progressive = (d.formatStreams || [])
+        .filter((s) => s.url)
+        .map((s) => ({ url: s.url, label: s.qualityLabel || "Video", mime: s.type || "video/mp4", ext: videoExt(s.type, false) }));
+      const audio = (d.adaptiveFormats || [])
+        .filter((s) => s.url && /audio/i.test(s.type || ""))
+        .sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0))
+        .slice(0, 1)
+        .map((s) => ({ url: s.url, label: "Beste Qualität", mime: s.type || "audio/mp4", ext: videoExt(s.type, true) }));
+      if (progressive.length || audio.length) return { progressive: dedupeByLabel(progressive), audio };
+    } catch {}
+  }
+  throw new Error("keine Streams");
+}
+
+function triggerDownload(url, filename, mime) {
+  const bridge = (typeof window.Android !== "undefined" && window.Android.downloadUrl) ? window.Android : null;
+  if (bridge) {
+    bridge.downloadUrl(url, filename, mime || "");
+    toast("Download gestartet — siehe Benachrichtigungen.");
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function renderDownloadOptions(progressive, audio, title) {
+  $("#dl-loader").classList.add("hidden");
+  const base = sanitizeFilename(title);
+  const optHtml = (s, icon, sub) => `
+    <button class="dl-option" data-url="${escapeHtml(s.url)}"
+            data-name="${escapeHtml(base + "." + s.ext)}" data-mime="${escapeHtml(s.mime)}">
+      <span class="dl-ico">${icon}</span>
+      <span class="dl-meta"><strong>${escapeHtml(s.label)}</strong><span>${sub} · ${s.ext.toUpperCase()}</span></span>
+      <span class="dl-arrow"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg></span>
+    </button>`;
+  let html = "";
+  if (progressive.length) {
+    html += `<div class="dl-group-label">Video mit Ton</div>`;
+    html += progressive.map((s) => optHtml(s, "🎬", "Video + Audio")).join("");
+  }
+  if (audio.length) {
+    html += `<div class="dl-group-label">Nur Audio</div>`;
+    html += audio.map((s) => optHtml(s, "🎵", "Tonspur")).join("");
+  }
+  if (!html) { $("#dl-error").classList.remove("hidden"); return; }
+  $("#dl-options").innerHTML = html;
+  $$("#dl-options .dl-option").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      triggerDownload(btn.dataset.url, btn.dataset.name, btn.dataset.mime);
+      closeModal("download");
+    }));
+}
+
+async function openDownload() {
+  if (!currentVideo) return;
+  $("#dl-title").textContent = currentVideo.title;
+  $("#dl-options").innerHTML = "";
+  $("#dl-error").classList.add("hidden");
+  $("#dl-loader").classList.remove("hidden");
+  openModal("download");
+  try {
+    const { progressive, audio } = await fetchStreams(currentVideo.id);
+    renderDownloadOptions(progressive, audio, currentVideo.title);
+  } catch {
+    $("#dl-loader").classList.add("hidden");
+    $("#dl-error").classList.remove("hidden");
+  }
+}
+
+$("#player-download").addEventListener("click", openDownload);
+
 /* --- Suche mit Vorschlägen --- */
 const searchInput = $("#video-search");
 const suggestionsBox = $("#video-suggestions");

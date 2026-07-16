@@ -288,12 +288,37 @@
         <span id="player-channel"></span>
       </div>
       <div class="player-actions">
+        <button class="btn btn-secondary small" id="player-download">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+          <span>Herunterladen</span>
+        </button>
         <button class="btn btn-secondary small" id="player-bookmark">
           <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <span>Merken</span>
         </button>
         <button class="btn btn-secondary small" id="player-alt">Anderer Player</button>
         <button class="btn btn-secondary small" data-close="player">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Video-Download ================= -->
+  <div class="modal hidden" id="download-modal" role="dialog" aria-modal="true" aria-label="Video herunterladen">
+    <div class="modal-backdrop" data-close="download"></div>
+    <div class="sheet glass dl-sheet">
+      <div class="sheet-head">
+        <h2>Herunterladen</h2>
+        <button class="icon-btn" data-close="download" aria-label="Schließen">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p class="dl-title" id="dl-title"></p>
+        <div class="loader" id="dl-loader"><div class="spinner"></div><span>Formate werden gesucht …</span></div>
+        <div id="dl-options"></div>
+        <div class="empty-state hidden" id="dl-error"><p>Für dieses Video sind keine Download-Formate verfügbar.</p></div>
+        <p class="footnote">Bitte nur für Inhalte nutzen, deren Download erlaubt ist (eigene Videos,
+          freie Lizenzen). Große Dateien laden im Hintergrund; der Fortschritt erscheint in den Benachrichtigungen.</p>
       </div>
     </div>
   </div>

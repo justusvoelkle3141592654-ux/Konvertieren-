@@ -800,6 +800,30 @@ button.list-row:hover { background: var(--stroke-soft); }
 }
 .news-card { cursor: pointer; }
 
+/* ---------- Video-Download ---------- */
+.dl-sheet .sheet-body { padding-top: 4px; }
+.dl-title { font-size: 14px; font-weight: 650; line-height: 1.4; margin: 4px 2px 14px; color: var(--text); }
+.dl-group-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); margin: 14px 2px 8px; }
+.dl-option {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  text-align: left;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+}
+.dl-option:active { transform: scale(0.985); }
+.dl-option .dl-ico { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--stroke-soft); font-size: 17px; }
+.dl-option .dl-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dl-option .dl-meta strong { font-size: 14.5px; font-weight: 650; }
+.dl-option .dl-meta span { font-size: 12px; color: var(--text-3); }
+.dl-option .dl-arrow { color: var(--text-3); }
+.dl-option .dl-arrow svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
 /* ---------- Segmented control ---------- */
 .segmented {
   display: inline-flex; gap: 3px;
