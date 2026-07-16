@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Universal File Converter</title>
+<script src="lib/xlsx.full.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.min.js"></script>
+<script src="lib/pptxgen.bundle.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/marked.min.js"></script>
+<script src="lib/turndown.js"></script>
+<script src="lib/js-yaml.min.js"></script>
+<script src="lib/lame.min.js"></script>
+<script src="lib/utif.js"></script>
+<script src="lib/gifenc.js"></script>
+<style>
+  :root {
+    --bg: #000000; --card: rgba(255,255,255,.055); --card2: rgba(255,255,255,.08);
+    --text: #f5f5f7; --muted: rgba(245,245,247,.6); --accent: #f5f5f7; --accent-fg: #000;
+    --accent2: rgba(245,245,247,.85); --ok: #30d158; --err: #ff453a;
+    --stroke: rgba(255,255,255,.1); --radius: 20px;
+    --blur: saturate(160%) blur(28px);
+  }
+  :root[data-theme="light"] {
+    --bg: #f2f2f7; --card: rgba(255,255,255,.62); --card2: rgba(0,0,0,.05);
+    --text: #1c1c1e; --muted: rgba(28,28,30,.6); --accent: #1c1c1e; --accent-fg: #fff;
+    --accent2: rgba(28,28,30,.85); --ok: #1faa4e; --err: #e0342a;
+    --stroke: rgba(0,0,0,.09);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 14px 14px 110px;
+  }
+  .wrap { width: 100%; max-width: 560px; }
+  h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -.5px; text-align: left; margin: 6px 2px 2px; }
+  .sub { text-align: left; color: var(--muted); font-size: .85rem; margin: 0 2px 4px; }
+  .stats { text-align: left; color: var(--muted); font-size: .78rem; margin: 0 2px 16px; font-weight: 600; }
+  .card {
+    background: var(--card);
+    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 18px; margin-bottom: 14px;
+  }
+  #dropzone {
+    border: 1.5px dashed var(--muted); border-radius: var(--radius);
+    padding: 32px 16px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  #dropzone.drag { border-color: var(--accent); background: var(--card2); }
+  #dropzone .big { font-size: 2.2rem; margin-bottom: 8px; }
+  #dropzone p { color: var(--muted); font-size: .92rem; }
+  #dropzone b { color: var(--text); }
+  #fileinput { display: none; }
+  .fileinfo { display: none; }
+  .fileinfo.show { display: block; }
+  .fname { font-weight: 700; word-break: break-all; margin: 16px 0 4px; font-size: 1rem; }
+  .fmeta { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  input[type="search"], input[type="text"] {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--stroke); background: var(--card2);
+    color: var(--text); font-size: 1rem; margin-bottom: 12px; outline: none;
+  }
+  input[type="search"]:focus, input[type="text"]:focus { border-color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip {
+    padding: 9px 15px; border-radius: 999px; border: 1px solid var(--stroke);
+    background: var(--card2); color: var(--text); font-size: .92rem; cursor: pointer;
+    transition: all .2s;
+  }
+  .chip.active { background: var(--accent); border-color: transparent; color: var(--accent-fg); font-weight: 600; }
+  button.primary {
+    width: 100%; padding: 15px; border: none; border-radius: 999px;
+    background: var(--accent); color: var(--accent-fg); font-size: 1.02rem; font-weight: 700;
+    cursor: pointer; transition: transform .15s, opacity .2s;
+  }
+  button.primary:active { transform: scale(.97); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  .msg { display: none; padding: 13px 15px; border-radius: 12px; font-size: .92rem; margin-top: 12px; line-height: 1.5; }
+  .msg.show { display: block; }
+  .msg.error { background: rgba(255,69,58,.14); color: var(--err); }
+  .msg.success { background: rgba(48,209,88,.14); color: var(--ok); }
+  .msg.info { background: var(--card2); color: var(--muted); }
+  .formats { color: var(--muted); font-size: .85rem; line-height: 1.75; }
+  .formats b { color: var(--text); }
+  .hit {
+    padding: 11px 13px; border-radius: 12px; background: var(--card2);
+    margin-bottom: 8px; font-size: .88rem; line-height: 1.6; word-break: break-word;
+  }
+  .hit .cat { color: var(--muted); font-size: .8rem; }
+  .nohit { color: var(--muted); font-size: .88rem; padding: 6px 2px; }
+  .spinner {
+    display: none; margin: 14px auto 0; width: 26px; height: 26px;
+    border: 3px solid var(--stroke); border-top-color: var(--text);
+    border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  .spinner.show { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script>
+  /* Theme von der Nexus-Host-App übernehmen (?theme=dark|light + postMessage) */
+  (function () {
+    function apply(t) {
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    }
+    var m = location.search.match(/[?&]theme=(dark|light)/);
+    if (m) apply(m[1]);
+    window.addEventListener("message", function (e) {
+      if (e.data && e.data.nexusTheme) apply(e.data.nexusTheme);
+    });
+  })();
+</script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Datei-Konverter</h1>
+  <p class="sub">Dokumente, Bilder, Tabellen, Audio &amp; mehr – alles offline auf deinem Gerät.</p>
+  <p class="stats" id="stats"></p>
+
+  <div class="card">
+    <div id="dropzone">
+      <div class="big">📂</div>
+      <p><b>Datei antippen</b> oder hierher ziehen</p>
+    </div>
+    <input type="file" id="fileinput">
+
+    <div class="fileinfo" id="fileinfo">
+      <div class="fname" id="fname"></div>
+      <div class="fmeta" id="fmeta"></div>
+      <label for="targetfilter">Zielformat (tippen zum Suchen)</label>
+      <input type="search" id="targetfilter" placeholder="z.B. pdf" autocomplete="off">
+      <div class="chips" id="targetlist"></div>
+      <button class="primary" id="convertbtn">🚀 Konvertieren</button>
+      <div class="spinner" id="spinner"></div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <label for="formatsearch">🔍 Format-Suche: Was kann diese App?</label>
+    <input type="search" id="formatsearch"
+           placeholder="Format eingeben, z.B. docx, mp3, heic …" autocomplete="off">
+    <div id="searchresults"></div>
+  </div>
+
+  <div class="card formats">
+    <b>Überblick:</b><br>
+    📄 Dokumente: PDF ↔ PPTX · DOCX, ODT, ODP, EPUB, RTF → PDF/TXT/HTML/…<br>
+    📝 Text &amp; Code: 80+ Formate (MD, HTML, JSON, YAML, XML, SRT, VTT,
+    IPYNB, Quellcode …) → PDF, HTML, DOCX, EPUB, TXT<br>
+    📊 Tabellen: CSV, TSV, XLSX, XLS, ODS, DIF, SLK, PRN, DBF ↔ untereinander + JSON<br>
+    🖼️ Bilder: JPG, PNG, WEBP, GIF, BMP, TIFF, SVG, ICO, AVIF → PNG/JPG/WEBP/BMP/GIF/TIFF/ICO/PDF<br>
+    🎵 Audio: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS → MP3/WAV<br>
+    🎬 Video: MP4, WEBM, MOV, MKV → Standbild (PNG/JPG) + Tonspur (MP3/WAV)<br>
+    <br>
+    Nicht jede Kombination ist technisch sinnvoll (ein Bild kann z.B. keine
+    Musik werden) – die App zeigt dir pro Datei genau die Ziele, die möglich sind.
+  </div>
+</div>
+
+<script src="js/convert.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

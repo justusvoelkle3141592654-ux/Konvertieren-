@@ -24,6 +24,7 @@ mkdir -p build/classes build/assets "$OUT"
 
 echo "[1/6] Web-App nach assets/ kopieren"
 cp ../index.html ../styles.css ../app.js ../icon.svg ../manifest.webmanifest build/assets/
+cp -r ../converter build/assets/converter
 
 echo "[2/6] Java kompilieren"
 javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d build/classes \

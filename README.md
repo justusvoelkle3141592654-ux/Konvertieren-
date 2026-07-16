@@ -1,6 +1,6 @@
 # Nexus 🌐
 
-**News · Sport · Videos · Quiz · Aufgaben — alles in einer App.**
+**News · Sport · Videos · Konverter · Aufgaben — alles in einer App.**
 
 Eine minimalistische, professionelle Web-App im Stil von Apples Liquid-Glass-Design:
 schwarzer Hintergrund, Glas-Oberflächen, dezente Akzente. Kein Framework, kein
@@ -39,7 +39,7 @@ wie eine native App installieren (PWA-Manifest inklusive).
 
 ### ⚽ Sport (Live-Fußball)
 - Live-Ergebnisse, Spieltag und komplette Tabelle für **Bundesliga,
-  2. Bundesliga und 3. Liga** (OpenLigaDB, kostenlos, ohne Anmeldung)
+  2. Bundesliga, 3. Liga und WM** (OpenLigaDB, kostenlos, ohne Anmeldung)
 - Laufende Spiele mit „Live“-Kennzeichnung, Tabellenzonen farblich markiert
   (Champions League / Europa League / Abstieg bzw. Auf-/Abstieg)
 - Aktualisiert sich beim Öffnen automatisch
@@ -51,12 +51,16 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
 
-### 🧠 Quiz
-- Eigener Quiz-Tab: **Thema eingeben → die KI erstellt online ein Quiz** dazu
-  (kostenlos über Pollinations.ai, ohne Konto)
-- Multiple-Choice mit sofortiger Auflösung, Erklärung je Frage, Fortschrittsbalken
-- Schwierigkeit (Einfach/Mittel/Schwer) und Fragenanzahl (5/8/10) wählbar
-- Ergebnis mit Bewertung und Frage-für-Frage-Rückblick; letztes Ergebnis wird gemerkt
+### 🔄 Konverter (Datei-Konverter)
+- Eingebetteter **Universal-Datei-Konverter** — 148 Dateitypen, über 900
+  Umwandlungswege, **komplett offline** auf dem Gerät (nichts wird hochgeladen)
+- Dokumente (PDF ↔ PPTX, DOCX/ODT/EPUB/RTF → PDF/TXT/HTML …), Text & Code
+  (MD, HTML, JSON, YAML, XML, SRT, IPYNB … → PDF/HTML/DOCX/EPUB), Tabellen
+  (CSV/TSV/XLSX/XLS/ODS ↔ + JSON), Bilder (JPG/PNG/WEBP/GIF/BMP/TIFF/SVG/ICO/AVIF),
+  Audio (MP3/WAV/OGG/FLAC/M4A/AAC → MP3/WAV) und Video (Standbild + Tonspur)
+- Datei antippen → passende Zielformate werden angezeigt → ein Tipp konvertiert
+- Format-Suche zeigt zu jedem Format alle möglichen Umwandlungen
+- Ins Nexus-Design integriert, folgt automatisch dem Hell-/Dunkel-Modus
 
 ### 🔖 Merkliste
 - Artikel und Videos mit einem Tipp merken (Lesezeichen-Symbol in Reader/Player)

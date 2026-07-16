@@ -211,6 +211,7 @@ function applyAppearance() {
   document.documentElement.dataset.accent = accent;
   document.documentElement.dataset.motion = reduceMotion ? "reduce" : "";
   $('meta[name="theme-color"]').content = dark ? "#000000" : "#f2f2f7";
+  if (typeof syncConverterTheme === "function") syncConverterTheme();
 }
 systemDark.addEventListener("change", () => {
   if (state.settings.theme === "system") applyAppearance();
@@ -224,7 +225,7 @@ function switchTab(tab) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === tab));
   $$(".tabbar .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   window.scrollTo({ top: 0 });
-  const loaders = { news: loadNews, sport: loadSport, videos: loadVideos };
+  const loaders = { news: loadNews, sport: loadSport, videos: loadVideos, convert: initConverterOnce };
   loaders[tab]?.();
 }
 
@@ -820,9 +821,10 @@ function renderBookmarks() {
    SPORT — Live-Fußball über OpenLigaDB (kostenlos, ohne Schlüssel)
    ========================================================================== */
 const SPORT_LEAGUES = [
-  { id: "bl1", name: "Bundesliga" },
-  { id: "bl2", name: "2. Bundesliga" },
-  { id: "bl3", name: "3. Liga" },
+  { id: "bl1", name: "Bundesliga", table: true },
+  { id: "bl2", name: "2. Bundesliga", table: true },
+  { id: "bl3", name: "3. Liga", table: true },
+  { id: "wm", name: "WM", table: false }, // Weltmeisterschaft — Shortcut wird aufgelöst
 ];
 
 function currentSeason() {
@@ -877,13 +879,18 @@ function renderSportLeagues() {
     }));
 }
 
-function renderMatches(matches) {
+function renderMatches(matches, leagueId) {
   const box = $("#sport-matches");
   if (!matches || !matches.length) {
-    box.innerHTML = `<div class="empty-state"><p>Keine Spiele für diesen Spieltag.</p></div>`;
+    box.innerHTML = `<div class="empty-state"><p>Keine Spiele gefunden.</p></div>`;
     return;
   }
-  $("#sport-matchday-label").textContent = matches[0]?.group?.groupName || "Spieltag";
+  // Bei der WM chronologisch nach Anstoß sortieren (nächste Spiele zuerst)
+  if (leagueId === "wm") {
+    matches = [...matches].sort((a, b) =>
+      new Date(a.matchDateTimeUTC || a.matchDateTime) - new Date(b.matchDateTimeUTC || b.matchDateTime));
+  }
+  $("#sport-matchday-label").textContent = matches[0]?.group?.groupName || (leagueId === "wm" ? "Weltmeisterschaft" : "Spieltag");
   const now = Date.now();
   box.innerHTML = matches.map((m) => {
     const kickoff = new Date(m.matchDateTimeUTC || m.matchDateTime);
@@ -960,29 +967,81 @@ function renderTable(table, league) {
   updateSportLegend(league);
 }
 
+/* WM-Shortcut auflösen: OpenLigaDB ändert den Bezeichner je Turnier
+   (z. B. wm2026). Wir probieren Kandidaten und merken uns den Treffer. */
+let wmResolved = null;
+async function resolveWmShortcut() {
+  if (wmResolved) return wmResolved;
+  const year = new Date().getFullYear();
+  const candidates = [];
+  for (const y of [year, year - 1, year + 1, 2026, 2022]) {
+    candidates.push([`wm${y}`, y], [`wc${y}`, y]);
+  }
+  for (const [shortcut, season] of candidates) {
+    try {
+      const data = await fetchJson(
+        `https://api.openligadb.de/getmatchdata/${shortcut}/${season}`, { timeout: 8000 });
+      if (Array.isArray(data) && data.length) {
+        wmResolved = { shortcut, season };
+        return wmResolved;
+      }
+    } catch {}
+  }
+  // Fallback: passende Liga über die Liste finden
+  try {
+    const leagues = await fetchJson("https://api.openligadb.de/getavailableleagues", { timeout: 9000 });
+    const wm = leagues
+      .filter((l) => /wm|world\s?cup|weltmeister/i.test(`${l.leagueName} ${l.leagueShortcut}`))
+      .sort((a, b) => (b.leagueSeason || 0) - (a.leagueSeason || 0))[0];
+    if (wm) {
+      wmResolved = { shortcut: wm.leagueShortcut, season: wm.leagueSeason };
+      return wmResolved;
+    }
+  } catch {}
+  throw new Error("WM nicht gefunden");
+}
+
 async function loadSport(force = false) {
   renderSportLeagues();
   if (!force && state.lastFetch.sport && !isStale("sport")) return;
 
   const errBox = $("#sport-error");
   errBox.classList.add("hidden");
-  const league = state.settings.sportLeague;
-  const season = currentSeason();
+  const leagueId = state.settings.sportLeague;
+  const meta = SPORT_LEAGUES.find((l) => l.id === leagueId) || SPORT_LEAGUES[0];
+  const hasTable = meta.table;
   const matchesBox = $("#sport-matches");
 
+  // Tabellenbereich nur für Ligen mit Tabelle zeigen
+  $("#sport-table-label").classList.toggle("hidden", !hasTable);
+  $("#sport-table").classList.toggle("hidden", !hasTable);
+
   try {
+    let matchUrl, tableUrl;
+    if (leagueId === "wm") {
+      const { shortcut, season } = await resolveWmShortcut();
+      matchUrl = `https://api.openligadb.de/getmatchdata/${shortcut}/${season}`;
+    } else {
+      const season = currentSeason();
+      matchUrl = `https://api.openligadb.de/getmatchdata/${leagueId}`;
+      tableUrl = `https://api.openligadb.de/getbltable/${leagueId}/${season}`;
+    }
+
     const [matches, table] = await Promise.all([
-      fetchJson(`https://api.openligadb.de/getmatchdata/${league}`, { timeout: 11000 }),
-      fetchJson(`https://api.openligadb.de/getbltable/${league}/${season}`, { timeout: 11000 }),
+      fetchJson(matchUrl, { timeout: 11000 }),
+      hasTable ? fetchJson(tableUrl, { timeout: 11000 }) : Promise.resolve(null),
     ]);
     state.lastFetch.sport = Date.now();
     $("#sport-updated").textContent = `Stand ${fmtClock()}`;
-    renderMatches(matches);
-    renderTable(table, league);
+    renderMatches(matches, leagueId);
+    if (hasTable) renderTable(table, leagueId);
   } catch {
     if (!matchesBox.querySelector(".match-card")) {
-      matchesBox.innerHTML = "";
-      errBox.classList.remove("hidden");
+      matchesBox.innerHTML = leagueId === "wm"
+        ? `<div class="empty-state"><p>Aktuell sind keine WM-Spiele verfügbar.<br>
+             Während eines Turniers erscheinen hier die Partien.</p></div>`
+        : "";
+      if (leagueId !== "wm") errBox.classList.remove("hidden");
     } else {
       toast("Sport konnte nicht aktualisiert werden.");
     }
@@ -1302,242 +1361,33 @@ function renderVideoChips(activeQuery = "__trending") {
 $("#videos-retry").addEventListener("click", () => loadVideos(true));
 
 /* ==========================================================================
-   QUIZ — Thema eingeben, KI erstellt online ein Quiz (Pollinations, gratis)
+   KONVERTER — eingebetteter Datei-Konverter (isolierter iframe, lazy)
    ========================================================================== */
-const QUIZ_SUGGESTIONS = [
-  "Weltraum", "Bundesliga", "Deutsche Geschichte", "Harry Potter",
-  "Hauptstädte", "Naturwissenschaft", "Musik der 2000er", "Antikes Rom",
-];
+let converterLoaded = false;
 
-state.quiz = {
-  diff: "Mittel",
-  count: 5,
-  data: null,       // { topic, questions: [{q, options, correct, explain}] }
-  current: 0,
-  answers: [],      // gewählter Index je Frage
-  running: false,
-};
-let quizLast = LS.get("nexus_quiz", null); // { topic, score, total, diff, at }
-
-/* --- KI-Textgenerierung über Pollinations (POST, GET-Fallback) --- */
-async function aiGenerate(system, user, { timeout = 45000 } = {}) {
-  const models = ["openai", "openai-fast", "mistral"];
-  const messages = [{ role: "system", content: system }, { role: "user", content: user }];
-  let lastErr;
-  for (const model of models) {
-    try {
-      const res = await fetchWithTimeout("https://text.pollinations.ai/openai", timeout, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model, messages, temperature: 0.75, seed: Math.floor(Math.random() * 1e6) }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content;
-      if (!text || text.length < 5) throw new Error("Leere Antwort");
-      return text;
-    } catch (err) { lastErr = err; }
-  }
-  // GET-Fallback (JSON-Modus von Pollinations)
-  const text = await fetchText(
-    `https://text.pollinations.ai/${encodeURIComponent(user)}?model=openai&json=true`,
-    { timeout });
-  if (!text) throw lastErr || new Error("Dienst nicht erreichbar");
-  return text;
+function converterTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 
-/* Robustes Herauslösen des JSON-Objekts aus der KI-Antwort */
-function parseQuizJson(raw) {
-  let text = String(raw).trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start !== -1 && end !== -1) text = text.slice(start, end + 1);
-  const obj = JSON.parse(text);
-  const questions = (obj.questions || obj.fragen || [])
-    .map((q) => ({
-      q: String(q.q || q.frage || q.question || "").trim(),
-      options: (q.options || q.answers || q.antworten || []).map((o) => String(o).trim()),
-      correct: Number(q.correct ?? q.correctIndex ?? q.richtig ?? 0),
-      explain: String(q.explain || q.explanation || q.erklaerung || q.erklärung || "").trim(),
-    }))
-    .filter((q) => q.q && q.options.length === 4 && q.correct >= 0 && q.correct <= 3);
-  if (!questions.length) throw new Error("Keine gültigen Fragen");
-  return questions;
-}
-
-/* --- Ansichten umschalten --- */
-function showQuizView(which) {
-  ["start", "loading", "play", "result"].forEach((v) =>
-    $(`#quiz-${v}`).classList.toggle("hidden", v !== which));
-}
-
-function renderQuizStart() {
-  $("#quiz-suggest").innerHTML = QUIZ_SUGGESTIONS.map((s) =>
-    `<button class="chip" data-topic="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("");
-  $$("#quiz-suggest .chip").forEach((chip) =>
-    chip.addEventListener("click", () => { $("#quiz-topic").value = chip.dataset.topic; startQuiz(); }));
-
-  const box = $("#quiz-last");
-  if (quizLast) {
-    box.classList.remove("hidden");
-    box.innerHTML = `
-      <div class="quiz-last-info">
-        <strong>Zuletzt: ${escapeHtml(quizLast.topic)}</strong>
-        <span>${quizLast.score} / ${quizLast.total} richtig · ${escapeHtml(quizLast.diff)} · ${timeAgo(quizLast.at)}</span>
-      </div>
-      <button class="btn btn-secondary small" id="quiz-repeat-last">Nochmal</button>`;
-    $("#quiz-repeat-last").addEventListener("click", () => {
-      $("#quiz-topic").value = quizLast.topic;
-      startQuiz();
-    });
-  } else {
-    box.classList.add("hidden");
-  }
-  showQuizView("start");
-}
-
-async function startQuiz() {
-  if (state.quiz.running) return;
-  const topic = $("#quiz-topic").value.trim();
-  if (topic.length < 2) { toast("Bitte gib ein Thema ein."); return; }
-
-  state.quiz.diff = $("#seg-quiz-diff .active")?.dataset.value || "Mittel";
-  state.quiz.count = Number($("#seg-quiz-count .active")?.dataset.value || 5);
-  state.quiz.running = true;
-  $("#quiz-loading-text").textContent = `Quiz zu „${topic}“ wird erstellt …`;
-  showQuizView("loading");
-
-  const system = "Du bist ein Quizmaster. Du erstellst faktisch korrekte Multiple-Choice-Quizfragen. " +
-    "Antworte AUSSCHLIESSLICH mit gültigem JSON – kein Markdown, kein Text davor oder danach.";
-  const user =
-    `Erstelle ein Quiz auf Deutsch zum Thema "${topic}". ` +
-    `Schwierigkeit: ${state.quiz.diff}. Genau ${state.quiz.count} Fragen. ` +
-    `Jede Frage hat genau 4 Antwortoptionen, davon genau eine richtig. ` +
-    `Gib das Ergebnis exakt in diesem JSON-Format zurück: ` +
-    `{"questions":[{"q":"Fragetext","options":["Option A","Option B","Option C","Option D"],"correct":0,"explain":"Kurze Erklärung in einem Satz"}]}. ` +
-    `"correct" ist der 0-basierte Index der richtigen Option.`;
-
-  try {
-    const raw = await aiGenerate(system, user);
-    const questions = parseQuizJson(raw).slice(0, state.quiz.count);
-    state.quiz.data = { topic, questions };
-    state.quiz.current = 0;
-    state.quiz.answers = [];
-    renderQuizQuestion();
-    showQuizView("play");
-  } catch {
-    toast("Quiz konnte nicht erstellt werden — bitte erneut versuchen.");
-    showQuizView("start");
-  } finally {
-    state.quiz.running = false;
-  }
-}
-
-function renderQuizQuestion() {
-  const { data, current } = state.quiz;
-  const q = data.questions[current];
-  $("#quiz-meta").textContent = data.topic;
-  $("#quiz-progress-text").textContent = `${current + 1} / ${data.questions.length}`;
-  $("#quiz-progress-fill").style.width = `${(current / data.questions.length) * 100}%`;
-  $("#quiz-question").textContent = q.q;
-  $("#quiz-explain").classList.add("hidden");
-  $("#quiz-next").classList.add("hidden");
-
-  const letters = ["A", "B", "C", "D"];
-  $("#quiz-options").innerHTML = q.options.map((opt, i) => `
-    <button class="quiz-option" data-opt="${i}">
-      <span class="opt-letter">${letters[i]}</span>
-      <span class="opt-text">${escapeHtml(opt)}</span>
-    </button>`).join("");
-  $$("#quiz-options .quiz-option").forEach((btn) =>
-    btn.addEventListener("click", () => answerQuiz(Number(btn.dataset.opt))));
-}
-
-function answerQuiz(choice) {
-  const { data, current } = state.quiz;
-  if (state.quiz.answers[current] != null) return; // schon beantwortet
-  const q = data.questions[current];
-  state.quiz.answers[current] = choice;
-
-  $$("#quiz-options .quiz-option").forEach((btn, i) => {
-    btn.disabled = true;
-    if (i === q.correct) btn.classList.add("correct");
-    else if (i === choice) btn.classList.add("wrong");
-    else btn.classList.add("dim");
+function initConverterOnce() {
+  if (converterLoaded) return;
+  converterLoaded = true;
+  const frame = $("#converter-frame");
+  frame.addEventListener("load", () => {
+    frame.classList.add("ready");
+    $("#converter-loader").classList.add("hidden");
+    // aktuelles Theme an den Konverter melden
+    try { frame.contentWindow.postMessage({ nexusTheme: converterTheme() }, "*"); } catch {}
   });
-
-  if (choice === q.correct && navigator.vibrate) navigator.vibrate(40);
-
-  if (q.explain) {
-    const ex = $("#quiz-explain");
-    ex.innerHTML = `<strong>${choice === q.correct ? "Richtig! " : "Leider falsch. "}</strong>${escapeHtml(q.explain)}`;
-    ex.classList.remove("hidden");
-  }
-  const next = $("#quiz-next");
-  next.textContent = current + 1 < data.questions.length ? "Weiter" : "Ergebnis anzeigen";
-  next.classList.remove("hidden");
+  frame.src = `converter/converter.html?theme=${converterTheme()}`;
 }
 
-$("#quiz-next").addEventListener("click", () => {
-  if (state.quiz.current + 1 < state.quiz.data.questions.length) {
-    state.quiz.current++;
-    renderQuizQuestion();
-  } else {
-    finishQuiz();
-  }
-});
-
-function finishQuiz() {
-  const { data, answers } = state.quiz;
-  const total = data.questions.length;
-  const score = data.questions.reduce((sum, q, i) => sum + (answers[i] === q.correct ? 1 : 0), 0);
-  const pct = score / total;
-
-  const rating = pct === 1
-    ? ["🏆", "Perfekt! Alles richtig!"]
-    : pct >= 0.8 ? ["🎉", "Stark! Fast alles gewusst."]
-    : pct >= 0.5 ? ["👍", "Solide Leistung."]
-    : pct >= 0.3 ? ["🙂", "Da geht noch was!"]
-    : ["📚", "Übung macht den Meister."];
-
-  $("#quiz-result-emoji").textContent = rating[0];
-  $("#quiz-score").textContent = `${score} / ${total}`;
-  $("#quiz-result-text").textContent = `${rating[1]} — Thema: ${data.topic}`;
-
-  const letters = ["A", "B", "C", "D"];
-  $("#quiz-review").innerHTML = data.questions.map((q, i) => {
-    const chosen = answers[i];
-    const ok = chosen === q.correct;
-    return `<div class="quiz-review-item">
-      <div class="quiz-review-q"><span class="mark">${ok ? "✅" : "❌"}</span>${escapeHtml(q.q)}</div>
-      <div class="quiz-review-a">
-        ${ok ? `<span class="good">${escapeHtml(q.options[q.correct])}</span>`
-             : `<span class="bad">${escapeHtml(q.options[chosen] ?? "—")}</span> →
-                <span class="good">${escapeHtml(q.options[q.correct])}</span>`}
-      </div>
-    </div>`;
-  }).join("");
-
-  quizLast = { topic: data.topic, score, total, diff: state.quiz.diff, at: Date.now() };
-  LS.set("nexus_quiz", quizLast);
-  showQuizView("result");
+/* Theme-Wechsel an den geladenen Konverter weiterreichen */
+function syncConverterTheme() {
+  if (!converterLoaded) return;
+  const frame = $("#converter-frame");
+  try { frame.contentWindow?.postMessage({ nexusTheme: converterTheme() }, "*"); } catch {}
 }
-
-$("#quiz-form").addEventListener("submit", (e) => { e.preventDefault(); startQuiz(); });
-$("#quiz-again").addEventListener("click", () => { $("#quiz-topic").value = ""; renderQuizStart(); });
-$("#quiz-retry-same").addEventListener("click", () => {
-  if (state.quiz.data) { $("#quiz-topic").value = state.quiz.data.topic; startQuiz(); }
-});
-
-/* Einfache Segmented-Controls im Quiz (ohne Persistenz) */
-["#seg-quiz-diff", "#seg-quiz-count"].forEach((id) => {
-  const seg = $(id);
-  seg?.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-value]");
-    if (!btn) return;
-    $$("button", seg).forEach((b) => b.classList.toggle("active", b === btn));
-  });
-});
 
 /* ==========================================================================
    AUFGABEN — mit Schütteln-zum-Rückgängigmachen
@@ -2000,7 +1850,6 @@ function boot() {
   renderProfile();
   renderTodos();
   renderBookmarks();
-  renderQuizStart();
   renderVideoChips();
   initShake();
   loadNews(true);           // beim Öffnen immer frisch laden

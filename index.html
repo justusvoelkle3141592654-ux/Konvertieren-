@@ -95,7 +95,7 @@
         <div class="loader"><div class="spinner"></div><span>Spiele werden geladen …</span></div>
       </div>
 
-      <h3 class="section-label">Tabelle</h3>
+      <h3 class="section-label" id="sport-table-label">Tabelle</h3>
       <div class="glass card table-card" id="sport-table"></div>
 
       <div class="empty-state hidden" id="sport-error">
@@ -131,79 +131,11 @@
       </div>
     </section>
 
-    <!-- ===== Quiz ===== -->
-    <section class="view" id="view-quiz" data-view="quiz">
-      <div class="view-head">
-        <h2>Quiz</h2>
-        <span class="view-meta" id="quiz-meta"></span>
-      </div>
-
-      <!-- Startbildschirm -->
-      <div id="quiz-start">
-        <div class="glass card quiz-intro">
-          <div class="quiz-intro-icon">🧠</div>
-          <strong>Quiz zu jedem Thema</strong>
-          <p>Gib ein Thema ein — die KI erstellt dir dazu online ein Quiz mit
-            Multiple-Choice-Fragen. Von „Weltraum“ über „Bundesliga“ bis „Harry Potter“.</p>
-        </div>
-        <form class="quiz-topic glass" id="quiz-form">
-          <input type="text" id="quiz-topic" placeholder="Thema, z. B. Antikes Rom" maxlength="80"
-                 autocomplete="off" enterkeyhint="go" aria-label="Quiz-Thema">
-          <button type="submit" class="btn btn-primary" id="quiz-start-btn" aria-label="Quiz starten">
-            <svg viewBox="0 0 24 24"><path d="m5 3 14 9-14 9z"/></svg>
-          </button>
-        </form>
-        <div class="quiz-suggest" id="quiz-suggest"></div>
-        <div class="quiz-row">
-          <div class="quiz-opt">
-            <span class="quiz-opt-label">Schwierigkeit</span>
-            <div class="segmented" id="seg-quiz-diff">
-              <button data-value="Einfach">Einfach</button>
-              <button data-value="Mittel" class="active">Mittel</button>
-              <button data-value="Schwer">Schwer</button>
-            </div>
-          </div>
-          <div class="quiz-opt">
-            <span class="quiz-opt-label">Fragen</span>
-            <div class="segmented" id="seg-quiz-count">
-              <button data-value="5" class="active">5</button>
-              <button data-value="8">8</button>
-              <button data-value="10">10</button>
-            </div>
-          </div>
-        </div>
-        <div class="quiz-last hidden" id="quiz-last"></div>
-      </div>
-
-      <!-- Ladeansicht -->
-      <div id="quiz-loading" class="hidden">
-        <div class="loader"><div class="spinner"></div><span id="quiz-loading-text">Quiz wird erstellt …</span></div>
-      </div>
-
-      <!-- Spielansicht -->
-      <div id="quiz-play" class="hidden">
-        <div class="quiz-progress">
-          <div class="quiz-progress-bar"><span id="quiz-progress-fill"></span></div>
-          <span class="quiz-progress-text" id="quiz-progress-text"></span>
-        </div>
-        <div class="glass card quiz-question" id="quiz-question"></div>
-        <div class="quiz-options" id="quiz-options"></div>
-        <div class="quiz-explain hidden" id="quiz-explain"></div>
-        <button class="btn btn-primary block hidden" id="quiz-next">Weiter</button>
-      </div>
-
-      <!-- Ergebnis -->
-      <div id="quiz-result" class="hidden">
-        <div class="glass card quiz-result-card">
-          <div class="quiz-result-emoji" id="quiz-result-emoji">🎉</div>
-          <div class="quiz-score" id="quiz-score">0 / 0</div>
-          <div class="quiz-result-text" id="quiz-result-text"></div>
-        </div>
-        <div class="glass card quiz-review" id="quiz-review"></div>
-        <div class="quiz-result-actions">
-          <button class="btn btn-primary block" id="quiz-again">Neues Quiz</button>
-          <button class="btn btn-secondary block" id="quiz-retry-same">Nochmal dasselbe</button>
-        </div>
+    <!-- ===== Konverter (eingebetteter Datei-Konverter) ===== -->
+    <section class="view" id="view-convert" data-view="convert">
+      <div class="converter-frame-wrap">
+        <div class="loader" id="converter-loader"><div class="spinner"></div><span>Konverter wird geladen …</span></div>
+        <iframe id="converter-frame" title="Datei-Konverter" allow="clipboard-write"></iframe>
       </div>
     </section>
 
@@ -336,9 +268,9 @@
       <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 9 5 3-5 3z"/></svg>
       <span>Videos</span>
     </button>
-    <button class="tab" data-tab="quiz" aria-label="Quiz">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/></svg>
-      <span>Quiz</span>
+    <button class="tab" data-tab="convert" aria-label="Konverter">
+      <svg viewBox="0 0 24 24"><path d="M4 8h12l-3-3M20 16H8l3 3"/><rect x="3" y="3" width="18" height="18" rx="4" fill="none" opacity="0"/></svg>
+      <span>Konverter</span>
     </button>
     <button class="tab" data-tab="todos" aria-label="Aufgaben">
       <svg viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
