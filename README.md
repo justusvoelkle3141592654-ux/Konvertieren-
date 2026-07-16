@@ -49,9 +49,11 @@ wie eine native App installieren (PWA-Manifest inklusive).
 - Trends nach Region (DE/AT/CH/US) sowie Kategorie-Chips
 - Videos starten **direkt in der App** (youtube-nocookie-Player) — ohne Account
 - **Ersatz-Player** per Knopfdruck für Videos, deren Einbettung YouTube blockiert
-- **Herunterladen**: Video mit Ton (mehrere Auflösungen) oder nur Audio, per
-  Android-DownloadManager im Hintergrund gespeichert (Stream-Links über
-  Piped/Invidious). Nur für Inhalte nutzen, deren Download erlaubt ist.
+- **Offline speichern**: Video (mehrere Auflösungen) oder nur Ton wird
+  **ausschließlich in der App** (privater App-Speicher) abgelegt und ist dann
+  ohne Internet abspielbar — nicht in Galerie/Dateimanager sichtbar. Eigene
+  **Offline-Mediathek** (Button „Offline“ im Videos-Tab) zum Ansehen und
+  Verwalten. Stream-Links über Piped/Invidious. Nur für erlaubte Inhalte nutzen.
 - Mehrere API-Instanzen mit automatischem Fallback für zuverlässige Suche
 
 ### 🔄 Konverter (Datei-Konverter)

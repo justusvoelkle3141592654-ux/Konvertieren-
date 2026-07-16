@@ -110,7 +110,10 @@
     <section class="view" id="view-videos" data-view="videos">
       <div class="view-head">
         <h2>Videos</h2>
-        <span class="view-meta" id="videos-meta"></span>
+        <button class="btn btn-secondary small" id="videos-offline-btn">
+          <svg viewBox="0 0 24 24"><path d="M5 20h14M12 4v10m0 0 4-4m-4 4-4-4"/></svg>
+          <span>Offline</span>
+        </button>
       </div>
       <div class="search-wrap">
         <div class="search-bar glass">
@@ -290,7 +293,7 @@
       <div class="player-actions">
         <button class="btn btn-secondary small" id="player-download">
           <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
-          <span>Herunterladen</span>
+          <span>Offline speichern</span>
         </button>
         <button class="btn btn-secondary small" id="player-bookmark">
           <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -302,23 +305,42 @@
     </div>
   </div>
 
-  <!-- ================= Video-Download ================= -->
-  <div class="modal hidden" id="download-modal" role="dialog" aria-modal="true" aria-label="Video herunterladen">
+  <!-- ================= Offline speichern ================= -->
+  <div class="modal hidden" id="download-modal" role="dialog" aria-modal="true" aria-label="Video offline speichern">
     <div class="modal-backdrop" data-close="download"></div>
     <div class="sheet glass dl-sheet">
       <div class="sheet-head">
-        <h2>Herunterladen</h2>
+        <h2>Offline speichern</h2>
         <button class="icon-btn" data-close="download" aria-label="Schließen">
           <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
       <div class="sheet-body">
         <p class="dl-title" id="dl-title"></p>
-        <div class="loader" id="dl-loader"><div class="spinner"></div><span>Formate werden gesucht …</span></div>
+        <div class="loader" id="dl-loader"><div class="spinner"></div><span>Qualitäten werden gesucht …</span></div>
         <div id="dl-options"></div>
-        <div class="empty-state hidden" id="dl-error"><p>Für dieses Video sind keine Download-Formate verfügbar.</p></div>
-        <p class="footnote">Bitte nur für Inhalte nutzen, deren Download erlaubt ist (eigene Videos,
-          freie Lizenzen). Große Dateien laden im Hintergrund; der Fortschritt erscheint in den Benachrichtigungen.</p>
+        <div class="empty-state hidden" id="dl-error"><p>Für dieses Video ist gerade keine Offline-Qualität verfügbar.</p></div>
+        <p class="footnote">Das Video wird <b>nur in der App</b> gespeichert (privater Speicher) und ist
+          dann ohne Internet abspielbar — es erscheint nicht in Galerie oder Dateimanager.
+          Bitte nur für Inhalte nutzen, deren Speicherung erlaubt ist.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Offline-Mediathek ================= -->
+  <div class="modal hidden" id="offline-modal" role="dialog" aria-modal="true" aria-label="Offline-Videos">
+    <div class="modal-backdrop" data-close="offline"></div>
+    <div class="sheet glass">
+      <div class="sheet-head">
+        <h2>Offline-Videos</h2>
+        <button class="icon-btn" data-close="offline" aria-label="Schließen">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div id="offline-list" class="offline-list"></div>
+        <p class="footnote">Offline-Videos liegen im privaten App-Speicher und werden beim
+          Deinstallieren der App mit entfernt.</p>
       </div>
     </div>
   </div>

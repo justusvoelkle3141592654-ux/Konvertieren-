@@ -1226,6 +1226,8 @@ function openPlayer(id, title, channel) {
   currentVideo = { id, title, channel, alt: false };
   mountPlayerFrame();
   $("#player-alt").textContent = "Anderer Player";
+  $("#player-alt").classList.remove("hidden");
+  $("#player-download").classList.remove("hidden");
   $("#player-title").textContent = title;
   $("#player-channel").textContent = channel;
   updatePlayerBookmarkBtn();
@@ -1303,46 +1305,80 @@ async function fetchStreams(id) {
   throw new Error("keine Streams");
 }
 
-function triggerDownload(url, filename, mime) {
-  const bridge = (typeof window.Android !== "undefined" && window.Android.downloadUrl) ? window.Android : null;
-  if (bridge) {
-    bridge.downloadUrl(url, filename, mime || "");
-    toast("Download gestartet — siehe Benachrichtigungen.");
-  } else {
-    window.open(url, "_blank", "noopener");
-  }
+/* ==========================================================================
+   OFFLINE-VIDEOS — nur in der App gespeichert (privater App-Speicher)
+   ========================================================================== */
+state.offline = LS.get("nexus_offline", []);
+const saveOfflineState = () => LS.set("nexus_offline", state.offline);
+
+function offlineBridge() {
+  return (typeof window.Android !== "undefined" && window.Android.saveOffline) ? window.Android : null;
+}
+const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+
+/* Von der nativen Seite nach Abschluss des Downloads aufgerufen. */
+window.NexusOffline = {
+  onComplete(id, ok) {
+    const e = state.offline.find((x) => x.id === id);
+    if (!e) return;
+    e.status = ok ? "ready" : "error";
+    saveOfflineState();
+    renderOffline();
+    updateOfflineBtn();
+    toast(ok ? "Offline gespeichert ✓" : "Offline-Speichern fehlgeschlagen.");
+  },
+};
+
+function saveOfflineChoice(url, ext, mime) {
+  const v = currentVideo;
+  if (!v) return;
+  const bridge = offlineBridge();
+  if (!bridge) { toast("Offline-Speichern ist nur in der App möglich."); return; }
+  const filename = `${v.id}.${ext}`;
+  state.offline = state.offline.filter((e) => e.id !== v.id);
+  state.offline.unshift({
+    id: v.id, title: v.title, channel: v.channel,
+    filename, ext, mime, savedAt: Date.now(), status: "loading",
+  });
+  saveOfflineState();
+  bridge.saveOffline(url, v.id, filename, mime || "");
+  toast("Wird offline gespeichert …");
+  updateOfflineBtn();
 }
 
-function renderDownloadOptions(progressive, audio, title) {
+function renderOfflineOptions(progressive, audio, title) {
   $("#dl-loader").classList.add("hidden");
-  const base = sanitizeFilename(title);
   const optHtml = (s, icon, sub) => `
     <button class="dl-option" data-url="${escapeHtml(s.url)}"
-            data-name="${escapeHtml(base + "." + s.ext)}" data-mime="${escapeHtml(s.mime)}">
+            data-ext="${escapeHtml(s.ext)}" data-mime="${escapeHtml(s.mime)}">
       <span class="dl-ico">${icon}</span>
       <span class="dl-meta"><strong>${escapeHtml(s.label)}</strong><span>${sub} · ${s.ext.toUpperCase()}</span></span>
-      <span class="dl-arrow"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg></span>
+      <span class="dl-arrow"><svg viewBox="0 0 24 24"><path d="M5 20h14M12 4v10m0 0 4-4m-4 4-4-4"/></svg></span>
     </button>`;
   let html = "";
   if (progressive.length) {
-    html += `<div class="dl-group-label">Video mit Ton</div>`;
-    html += progressive.map((s) => optHtml(s, "🎬", "Video + Audio")).join("");
+    html += `<div class="dl-group-label">Video (offline ansehen)</div>`;
+    html += progressive.map((s) => optHtml(s, "🎬", "Video + Ton")).join("");
   }
   if (audio.length) {
-    html += `<div class="dl-group-label">Nur Audio</div>`;
-    html += audio.map((s) => optHtml(s, "🎵", "Tonspur")).join("");
+    html += `<div class="dl-group-label">Nur Ton</div>`;
+    html += audio.map((s) => optHtml(s, "🎵", "Audio")).join("");
   }
   if (!html) { $("#dl-error").classList.remove("hidden"); return; }
   $("#dl-options").innerHTML = html;
   $$("#dl-options .dl-option").forEach((btn) =>
     btn.addEventListener("click", () => {
-      triggerDownload(btn.dataset.url, btn.dataset.name, btn.dataset.mime);
+      saveOfflineChoice(btn.dataset.url, btn.dataset.ext, btn.dataset.mime);
       closeModal("download");
     }));
 }
 
-async function openDownload() {
+async function openOfflineSave() {
   if (!currentVideo) return;
+  if (!offlineBridge()) {
+    toast("Offline-Speichern ist nur in der installierten App verfügbar.");
+    return;
+  }
   $("#dl-title").textContent = currentVideo.title;
   $("#dl-options").innerHTML = "";
   $("#dl-error").classList.add("hidden");
@@ -1350,14 +1386,89 @@ async function openDownload() {
   openModal("download");
   try {
     const { progressive, audio } = await fetchStreams(currentVideo.id);
-    renderDownloadOptions(progressive, audio, currentVideo.title);
+    renderOfflineOptions(progressive, audio, currentVideo.title);
   } catch {
     $("#dl-loader").classList.add("hidden");
     $("#dl-error").classList.remove("hidden");
   }
 }
 
-$("#player-download").addEventListener("click", openDownload);
+$("#player-download").addEventListener("click", openOfflineSave);
+
+/* --- Offline-Mediathek --- */
+function updateOfflineBtn() {
+  const n = state.offline.length;
+  $("#videos-offline-btn span").textContent = n ? `Offline (${n})` : "Offline";
+}
+
+function renderOffline() {
+  const box = $("#offline-list");
+  if (!state.offline.length) {
+    box.innerHTML = `<div class="offline-empty">Noch keine Offline-Videos.<br>
+      Öffne ein Video und tippe auf „Offline speichern“, um es hier ohne Internet anzusehen.</div>`;
+    return;
+  }
+  const statusText = { loading: "⏳ wird gespeichert …", ready: "✓ offline verfügbar", error: "✕ fehlgeschlagen" };
+  box.innerHTML = state.offline.map((e, i) => `
+    <div class="offline-row" data-off="${i}">
+      <span class="offline-play" data-play="${e.status === "ready" ? i : ""}">
+        <img src="${escapeHtml(ytThumb(e.id))}" alt="" loading="lazy">
+      </span>
+      <span class="offline-info">
+        <strong>${escapeHtml(e.title)}</strong>
+        <span>${escapeHtml(e.channel || "")}</span>
+        <span class="offline-status ${e.status}">${statusText[e.status] || ""}</span>
+      </span>
+      <button class="icon-btn small offline-del" data-del="${i}" aria-label="Löschen">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+      </button>
+    </div>`).join("");
+
+  $$("#offline-list .offline-play", box).forEach((el) =>
+    el.addEventListener("click", () => {
+      const idx = el.dataset.play;
+      if (idx === "") { toast("Video ist noch nicht fertig gespeichert."); return; }
+      playOffline(state.offline[Number(idx)]);
+    }));
+  $$("#offline-list [data-del]", box).forEach((btn) =>
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      deleteOffline(Number(btn.dataset.del));
+    }));
+}
+
+function deleteOffline(idx) {
+  const e = state.offline[idx];
+  if (!e) return;
+  const bridge = offlineBridge();
+  if (bridge && bridge.deleteOffline) bridge.deleteOffline(e.filename);
+  state.offline.splice(idx, 1);
+  saveOfflineState();
+  renderOffline();
+  updateOfflineBtn();
+  toast("Aus Offline entfernt.");
+}
+
+function playOffline(entry) {
+  if (!entry) return;
+  currentVideo = { id: entry.id, title: entry.title, channel: entry.channel, alt: false, local: true };
+  const src = `https://${location.hostname === "localhost" ? location.host : "appassets.androidx.dev"}/offline/${encodeURIComponent(entry.filename)}`;
+  $("#player-frame").innerHTML =
+    `<video src="${escapeHtml(src)}" controls autoplay playsinline
+       style="width:100%;height:100%;background:#000;object-fit:contain"></video>`;
+  $("#player-title").textContent = entry.title;
+  $("#player-channel").textContent = entry.channel || "";
+  $("#player-alt").classList.add("hidden");
+  $("#player-download").classList.add("hidden");
+  updatePlayerBookmarkBtn();
+  // Offline-Modal direkt ausblenden (ohne history.back, um Race mit openModal
+  // zu vermeiden), dann den Player öffnen.
+  if (openModals[openModals.length - 1] === "offline") openModals.pop();
+  $("#offline-modal").classList.add("hidden");
+  openModal("player");
+}
+
+$("#videos-offline-btn").addEventListener("click", () => { renderOffline(); openModal("offline"); });
 
 /* --- Suche mit Vorschlägen --- */
 const searchInput = $("#video-search");
@@ -1931,7 +2042,7 @@ $("#topic-form").addEventListener("submit", (e) => {
 $("#settings-reset").addEventListener("click", () => {
   if (!confirm("Wirklich alles zurücksetzen? Konten, Aufgaben und Einstellungen werden gelöscht.")) return;
   ["nexus_settings", "nexus_session", "nexus_todos", "nexus_stats", "nexus_users",
-    "nexus_bookmarks", "nexus_chat", "nexus_quiz"]
+    "nexus_bookmarks", "nexus_chat", "nexus_quiz", "nexus_offline"]
     .forEach((k) => LS.remove(k));
   Object.keys(localStorage)
     .filter((k) => k.startsWith("nexus_settings_"))
@@ -1958,6 +2069,8 @@ function boot() {
   renderProfile();
   renderTodos();
   renderBookmarks();
+  renderOffline();
+  updateOfflineBtn();
   renderVideoChips();
   initShake();
   loadNews(true);           // beim Öffnen immer frisch laden
