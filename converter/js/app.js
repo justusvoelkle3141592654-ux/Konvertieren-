@@ -175,15 +175,24 @@ function renderSearch(query) {
 searchInput.addEventListener("input", () => renderSearch(searchInput.value));
 
 /* ---------- Speichern: Android-Bridge oder Browser-Download ---------- */
+function nativeBridge() {
+  // Bridge steckt im Haupt-Fenster (Nexus-WebView); der Konverter läuft im iframe.
+  try { if (window.Android && window.Android.saveFile) return window.Android; } catch (e) {}
+  try { if (window.parent && window.parent.Android && window.parent.Android.saveFile) return window.parent.Android; } catch (e) {}
+  try { if (window.top && window.top.Android && window.top.Android.saveFile) return window.top.Android; } catch (e) {}
+  return null;
+}
+
 async function deliver(blob, name, mime) {
-  if (window.Android && window.Android.saveFile) {
+  const bridge = nativeBridge();
+  if (bridge) {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let bin = "";
     const CHUNK = 32768;
     for (let i = 0; i < bytes.length; i += CHUNK) {
       bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
     }
-    window.Android.saveFile(btoa(bin), name, mime);
+    bridge.saveFile(btoa(bin), name, mime);
     return;
   }
   const url = URL.createObjectURL(blob);
