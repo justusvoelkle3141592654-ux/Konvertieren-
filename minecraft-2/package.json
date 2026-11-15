@@ -1,0 +1,23 @@
+{
+  "name": "minecraft-2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minecraft-inspiriertes Voxel-Sandbox im Browser (inoffiziell, eigene Implementierung)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "textures:setup": "node scripts/setup-textures.js",
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "test:e2e": "node tests/e2e/run-all.mjs"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "5.3.0",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1",
+    "vite": "8.3.8"
+  }
+}

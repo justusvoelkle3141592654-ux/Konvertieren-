@@ -1,0 +1,607 @@
+/* Minecraft-2-Oberfläche: Pixelschrift, graue Buttons mit Fase, dunkle Panels.
+   Alle Maße sind in "GUI-Pixeln"; #ui-scaler skaliert sie ganzzahlig. */
+
+:root {
+  --pixel: 'Press Start 2P', 'Courier New', monospace;
+  --text: #ffffff;
+  --text-shadow: 2px 2px 0 #3f3f3f;
+  --btn-face: #6f6f6f;
+  --btn-face-hover: #8b8b8b;
+  --btn-face-disabled: #4a4a4a;
+  --btn-light: #a0a0a0;
+  --btn-dark: #373737;
+  --panel-bg: rgba(0, 0, 0, 0.55);
+  --panel-border: #000000;
+  --accent: #ffff55;
+  --danger: #ff5555;
+  --gui: 2;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: var(--pixel);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  background: #000;
+}
+
+#ui-scaler {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  text-shadow: var(--text-shadow);
+}
+
+.screen.overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.hud-only {
+  pointer-events: none;
+}
+
+/* ---------- Buttons ---------- */
+
+.mc-btn {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--text);
+  text-shadow: var(--text-shadow);
+  width: 200px;
+  height: 20px;
+  margin: 2px 0;
+  padding: 0 6px;
+  border: 2px solid #000;
+  background: var(--btn-face);
+  box-shadow: inset 2px 2px 0 var(--btn-light), inset -2px -2px 0 var(--btn-dark);
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.mc-btn.wide {
+  width: 300px;
+}
+
+.mc-btn.small {
+  width: 96px;
+}
+
+.mc-btn.tiny {
+  width: 24px;
+  padding: 0;
+}
+
+.mc-btn:hover:not(:disabled),
+.mc-btn:focus-visible:not(:disabled) {
+  background: var(--btn-face-hover);
+  outline: none;
+  color: #ffffa0;
+}
+
+.mc-btn:active:not(:disabled) {
+  box-shadow: inset 2px 2px 0 var(--btn-dark), inset -2px -2px 0 var(--btn-light);
+}
+
+.mc-btn:disabled {
+  color: #9b9b9b;
+  background: var(--btn-face-disabled);
+  cursor: default;
+}
+
+.mc-btn.selected {
+  background: #4f7f4f;
+  color: #ffffff;
+}
+
+.mc-btn.danger {
+  color: #ffd0d0;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+/* ---------- Text & Panels ---------- */
+
+.title {
+  font-size: 16px;
+  margin: 10px 0 14px;
+  color: var(--text);
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 8px;
+  margin: 4px 0 8px;
+  color: #d0d0d0;
+  text-align: center;
+}
+
+.label {
+  font-size: 8px;
+  color: #e0e0e0;
+  margin: 6px 0 2px;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 2px solid var(--panel-border);
+  padding: 8px;
+  pointer-events: auto;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.mc-input {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: #fff;
+  background: #000;
+  border: 2px solid #8b8b8b;
+  padding: 4px 6px;
+  width: 260px;
+  height: 22px;
+  outline: none;
+  pointer-events: auto;
+}
+
+.mc-input:focus {
+  border-color: #ffffff;
+}
+
+.mc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 200px;
+  height: 20px;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  margin: 0;
+}
+
+.mc-slider::-webkit-slider-runnable-track {
+  height: 20px;
+  background: var(--btn-face);
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 var(--btn-light), inset -2px -2px 0 var(--btn-dark);
+}
+
+.mc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 20px;
+  background: #d0d0d0;
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 #ffffff, inset -2px -2px 0 #6c6c6c;
+  margin-top: -2px;
+}
+
+.mc-slider::-moz-range-track {
+  height: 20px;
+  background: var(--btn-face);
+  border: 2px solid #000;
+}
+
+.mc-slider::-moz-range-thumb {
+  width: 8px;
+  height: 20px;
+  background: #d0d0d0;
+  border: 2px solid #000;
+  border-radius: 0;
+}
+
+/* ---------- Hintergründe ---------- */
+
+.dirt-bg {
+  background-color: #5a3d26;
+  background-image: var(--dirt-tile);
+  background-size: 64px 64px;
+  image-rendering: pixelated;
+}
+
+.blur-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.55) 100%);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+  pointer-events: none;
+}
+
+/* ---------- Titel ---------- */
+
+.title-screen {
+  justify-content: flex-start;
+}
+
+.logo-wrap {
+  position: relative;
+  margin-top: 14px;
+  width: 340px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.logo-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.splash {
+  position: absolute;
+  right: -20px;
+  top: 40px;
+  color: #ffff00;
+  font-size: 8px;
+  transform: rotate(-20deg);
+  transform-origin: center;
+  white-space: nowrap;
+  text-shadow: 2px 2px 0 #404000;
+  animation: splash-pulse 0.9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes splash-pulse {
+  from {
+    transform: rotate(-20deg) scale(1);
+  }
+  to {
+    transform: rotate(-20deg) scale(1.08);
+  }
+}
+
+.title-menu {
+  margin-top: 26px;
+}
+
+.title-footer {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  font-size: 7px;
+  white-space: nowrap;
+  color: #cfcfcf;
+  text-shadow: var(--text-shadow);
+  pointer-events: none;
+}
+
+.title-footer.right {
+  left: auto;
+  right: 4px;
+  text-align: right;
+}
+
+/* ---------- Weltauswahl ---------- */
+
+.world-list {
+  width: 380px;
+  height: 200px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid #000;
+  padding: 4px;
+  pointer-events: auto;
+}
+
+.world-entry {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px;
+  margin-bottom: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.world-entry:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.world-entry.selected {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.world-preview {
+  width: 96px;
+  height: 54px;
+  flex: 0 0 96px;
+  background: #1c2d4a center/cover no-repeat;
+  border: 2px solid #000;
+  image-rendering: pixelated;
+}
+
+.world-meta {
+  font-size: 8px;
+  line-height: 1.6;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.world-meta .name {
+  color: #ffffff;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world-meta .info {
+  color: #bfbfbf;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-hint {
+  color: #cfcfcf;
+  text-align: center;
+  padding: 24px 8px;
+  line-height: 1.8;
+}
+
+/* ---------- Dialoge ---------- */
+
+.dialog {
+  background: #c6c6c6;
+  color: #202020;
+  text-shadow: none;
+  border: 3px solid #000;
+  box-shadow: inset 3px 3px 0 #ffffff, inset -3px -3px 0 #555555;
+  padding: 12px 14px;
+  width: 360px;
+  max-height: 90%;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.dialog h2 {
+  font-size: 10px;
+  margin: 0 0 10px;
+  color: #202020;
+  text-align: center;
+}
+
+.dialog .label {
+  color: #404040;
+  text-shadow: none;
+}
+
+.dialog p {
+  margin: 4px 0 8px;
+  line-height: 1.6;
+  color: #303030;
+  text-shadow: none;
+}
+
+.dialog .mc-input {
+  background: #ffffff;
+  color: #000;
+  border-color: #555;
+  width: 100%;
+  text-shadow: none;
+}
+
+.dialog .btn-row {
+  margin-top: 10px;
+}
+
+.dialog .mc-btn {
+  text-shadow: var(--text-shadow);
+}
+
+/* ---------- Ladebildschirm / Tod ---------- */
+
+.loading-screen {
+  justify-content: center;
+  gap: 10px;
+}
+
+.progress {
+  width: 300px;
+  height: 14px;
+  background: #222;
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 #444;
+  position: relative;
+}
+
+.progress > div {
+  height: 100%;
+  background: #6fbf3f;
+  box-shadow: inset 0 -2px 0 #3d7d1f;
+  width: 0%;
+  transition: width 0.15s linear;
+}
+
+.death-screen {
+  background: rgba(150, 0, 0, 0.55);
+  justify-content: center;
+}
+
+.death-title {
+  font-size: 16px;
+  color: #ffffff;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+/* ---------- Spiel-HUD ---------- */
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: #ffffff;
+  mix-blend-mode: difference;
+}
+
+.crosshair::before {
+  left: 7px;
+  top: 0;
+  width: 2px;
+  height: 16px;
+}
+
+.crosshair::after {
+  top: 7px;
+  left: 0;
+  height: 2px;
+  width: 16px;
+}
+
+.hud-hint {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  color: #ffffff;
+  font-size: 8px;
+  line-height: 1.7;
+  pointer-events: none;
+}
+
+.lock-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.35);
+  text-align: center;
+  line-height: 2;
+}
+
+.toast-host {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(20, 20, 30, 0.85);
+  border: 2px solid #5a4aa0;
+  padding: 6px 8px;
+  color: #ffffff;
+  font-size: 8px;
+  max-width: 260px;
+  line-height: 1.6;
+}
+
+.toast b {
+  color: #ffff55;
+  font-weight: normal;
+}
+
+/* ---------- Scroll-Leisten (Firefox/Chrome) ---------- */
+
+.world-list::-webkit-scrollbar,
+.dialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.world-list::-webkit-scrollbar-thumb,
+.dialog::-webkit-scrollbar-thumb {
+  background: #6a6a6a;
+  border: 1px solid #000;
+}
+
+.kbd {
+  display: inline-block;
+  min-width: 110px;
+  text-align: center;
+}

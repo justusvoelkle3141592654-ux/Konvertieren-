@@ -1,0 +1,17 @@
+# Abhängigkeiten und Build-Ausgabe
+node_modules/
+dist/
+coverage/
+
+# Lokal extrahierte Minecraft-Assets (Mojang/Microsoft) – niemals committen
+local-assets/
+
+# Test-Artefakte
+tests/e2e/output/
+
+# System- und Editordateien
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
