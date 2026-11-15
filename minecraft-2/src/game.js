@@ -5,6 +5,7 @@ import { TextureAtlas } from './assets/texture-atlas.js';
 import { REQUIRED_TEXTURES } from './assets/texture-names.js';
 import { hashString } from './engine/random.js';
 import { Input } from './engine/input.js';
+import { FixedClock } from './engine/clock.js';
 import { createPanorama } from './ui/panorama.js';
 import { buildTitleScreen } from './ui/menu.js';
 import { buildWorldSelection } from './ui/world-selection.js';
@@ -17,6 +18,7 @@ import { button, closeAllDialogs, dirtTileCss, h, openDialog, ScreenManager } fr
 import { saveSystem } from './systems/save-system.js';
 import { settings } from './systems/settings.js';
 import { GameSession } from './session.js';
+import { findSpawn } from './world/gen/overworld.js';
 import { ChunkWorkerPool } from './world/worker-chunks.js';
 
 const MENU_SCREENS_WITH_BACK = ['worlds', 'options', 'controls', 'achievements', 'stats'];
@@ -54,6 +56,7 @@ export class Game {
     this.mode = 'menu'; // menu | loading | playing | paused
     this.busy = false;
     this.lastFrame = performance.now();
+    this.clock = new FixedClock();
     this.previewResolvers = [];
     this.lastAutosave = 0;
     this.frameCount = 0;
@@ -154,10 +157,14 @@ export class Game {
 
     if (this.session) {
       if (this.mode === 'playing') {
+        const ticks = this.clock.advance(now);
+        for (let i = 0; i < ticks; i++) this.session.tick();
         this.session.update(dt, this.input, Boolean(document.pointerLockElement));
         this.session.meta.playTime = (this.session.meta.playTime || 0) + dt;
       } else {
+        this.clock.advance(now);
         this.session.chunkManager.rebuildMeshes(4);
+        this.session.applyEnvironment(dt);
         this.session.syncCamera();
       }
       this.atlas.update(now);
@@ -259,11 +266,13 @@ export class Game {
 
   async createWorld(options) {
     const now = Date.now();
+    const seed = seedFromText(options.seedText);
+    const spawn = options.generator === 'flat' ? { x: 0.5, y: 1, z: 0.5 } : findSpawn(seed);
     const meta = {
       id: `w${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
       name: options.name,
       seedText: options.seedText || '',
-      seed: seedFromText(options.seedText),
+      seed,
       mode: GAME_MODES.includes(options.mode) ? options.mode : 'survival',
       difficulty: DIFFICULTIES.includes(options.difficulty) ? options.difficulty : 'normal',
       generator: options.generator || 'default',
@@ -272,8 +281,8 @@ export class Game {
       lastPlayed: now,
       playTime: 0,
       dimension: 'overworld',
-      spawn: [0, 1, 0],
-      player: { pos: [0.5, 1, 0.5], rot: [0, -0.25] },
+      spawn: [spawn.x, spawn.y, spawn.z],
+      player: { pos: [spawn.x, spawn.y, spawn.z], rot: [0, -0.25] },
       achievements: [],
       stats: {},
       beatGame: false,
@@ -306,8 +315,12 @@ export class Game {
       this.screens.show('loading', { replace: true });
       this.loading.setProgress(0, 'Texturen werden geladen …');
       await this.ensureAtlas((p) => this.loading.setProgress(p * 0.2, 'Texturen werden geladen …'));
-      if (!this.pool) this.pool = new ChunkWorkerPool(workerCount());
+      if (!this.pool) {
+        this.pool = new ChunkWorkerPool(workerCount());
+        this.pool.setAtlas(this.atlas.uvTable());
+      }
       this.session = new GameSession({ meta, atlas: this.atlas, pool: this.pool });
+      this.clock.reset();
       this.applyDisplaySettings();
       await this.session.waitForSpawnArea((p, text) => this.loading.setProgress(0.2 + p * 0.8, `Gelände wird gebaut … ${text}`));
       this.mode = 'playing';
@@ -329,18 +342,15 @@ export class Game {
     }
   }
 
-  /** Speichert Spielerzustand, Metadaten und veränderte Chunks. */
+  /** Speichert Spielerzustand, Metadaten, Vorschaubild und veränderte Chunks. */
   async saveGame() {
     const session = this.session;
     if (!session) return;
     const meta = session.meta;
-    const pos = session.position;
     meta.lastPlayed = Date.now();
-    meta.player = { pos: [pos.x, pos.y - 1.6, pos.z], rot: [session.controller.yaw, session.controller.pitch] };
+    session.updateMeta();
     meta.preview = await this.capturePreview().catch(() => undefined);
-    const modified = [...session.world.chunks.values()].filter((chunk) => chunk.modified);
-    await saveSystem.putChunks(modified.map((chunk) => chunk.serialize(meta.id, session.world.dimension)));
-    for (const chunk of modified) chunk.modified = false;
+    await session.saveChunks();
     await saveSystem.putWorld(meta);
   }
 

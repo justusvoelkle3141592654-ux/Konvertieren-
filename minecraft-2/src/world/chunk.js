@@ -28,6 +28,7 @@ export class Chunk {
     this.blockEntities = new Map(data.blockEntities ?? []);
     this.modified = Boolean(data.modified);
     this.dirty = true;
+    this.version = 0;
     this.meshes = null;
   }
 
@@ -53,6 +54,8 @@ export class Chunk {
       cz: this.cz,
       blocks: this.blocks,
       meta: this.meta,
+      light: this.light,
+      heightmap: this.heightmap,
       biomes: this.biomes,
       blockEntities: [...this.blockEntities.entries()],
     };

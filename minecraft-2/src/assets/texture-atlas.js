@@ -123,6 +123,13 @@ export class TextureAtlas {
     return [(tile.x + inset) / s, (tile.y + inset) / s, (tile.x + TILE - inset) / s, (tile.y + TILE - inset) / s];
   }
 
+  /** Vollständige UV-Tabelle (für Worker). */
+  uvTable() {
+    const table = {};
+    for (const name of this.tiles.keys()) table[name] = this.uv(name);
+    return table;
+  }
+
   dispose() {
     this.texture?.dispose();
     this.texture = null;

@@ -1,4 +1,4 @@
-// Pool von Chunk-Workern auf dem Hauptthread: verteilt Anfragen und liefert Ergebnisse als Promise.
+// Pool von Workern auf dem Hauptthread: verteilt Erzeugungs- und Mesh-Aufträge.
 export class ChunkWorkerPool {
   constructor(size) {
     this.size = Math.max(1, size);
@@ -13,16 +13,30 @@ export class ChunkWorkerPool {
     }
   }
 
-  /** Startet eine Chunk-Erzeugung. Resolve mit den Chunk-Daten. */
-  request(params) {
+  /** Sendet einen Auftrag an den am wenigsten beschäftigten Worker. */
+  request(type, params, transfer = []) {
     const id = this.nextId++;
-    // Den am wenigsten beschäftigten Worker wählen
     const slot = this.workers.reduce((best, w) => (w.load < best.load ? w : best), this.workers[0]);
     slot.load++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject, slot });
-      slot.worker.postMessage({ type: 'gen', id, ...params });
+      slot.worker.postMessage({ type, id, ...params }, transfer);
     });
+  }
+
+  /** Erzeugt Chunk-Daten (Gelände, Vegetation, Licht). */
+  generate(params) {
+    return this.request('gen', params);
+  }
+
+  /** Baut die Geometrie aus gepufferten Nachbarschaftsdaten. */
+  mesh(params, transfer) {
+    return this.request('mesh', params, transfer);
+  }
+
+  /** Übergibt die UV-Tabelle des Atlas an alle Worker. */
+  setAtlas(uv) {
+    for (const { worker } of this.workers) worker.postMessage({ type: 'atlas', uv });
   }
 
   handleMessage(msg) {

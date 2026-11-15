@@ -134,7 +134,7 @@ starten den Dev-Server selbst (oder nutzen `E2E_BASE_URL`, falls gesetzt).
 | Phase | Inhalt | Stand |
 | --- | --- | --- |
 | 1 | Startmenü, Weltauswahl, Neue Welt, Optionen, Steuerung, Pause, Lade- und Todesbildschirm, Texture-Setup, Atlas | **abgeschlossen** (Abnahmetest `phase1-menus`) |
-| 2 | Unendliche Oberwelt, Biome, Höhlen, Erze, Wasser/Lava, Licht, Tag/Nacht, Wetter, Speichern | in Arbeit |
+| 2 | Unendliche Oberwelt, 16 Biome, Höhlen, Schluchten, Flüsse, Seen, Erze, Vegetation, Wasser/Lava mit Fließverhalten, Licht, Tag/Nacht, Wetter, Speichern | **abgeschlossen** (Abnahmetest `phase2-world`) – Einschränkungen siehe unten |
 | 3 | Spielerphysik, Hotbar, Inventar, Abbauen und Platzieren | ausstehend |
 | 4 | Überleben (Leben, Hunger, Schaden), Kreativmodus, Befehle | ausstehend |
 | 5 | Rezepte, Werkbank, Ofen, Truhen, Werkzeuge, Landwirtschaft, Fortschritte | ausstehend |
@@ -144,3 +144,14 @@ starten den Dev-Server selbst (oder nutzen `E2E_BASE_URL`, falls gesetzt).
 
 Dieser Stand wird mit jeder Phase aktualisiert. Nicht fertige Funktionen sind hier ausdrücklich
 als offen gekennzeichnet.
+
+### Bekannte Einschränkungen (Stand Phase 2)
+
+- **Fallende Blöcke** (Sand, Kies) fallen sofort bis zum Boden, ohne Fallanimation.
+- **Azaleen** sind noch nicht enthalten.
+- **Strukturen** (Dörfer, Tempel, Festungen, Festung im Nether, Endportalraum) folgen in Phase 7.
+- **Mob-Spawnregeln** sind in den Biomdaten vorbereitet, Mobs folgen in Phase 6.
+- **Licht** wird pro Chunk im Worker berechnet und an den Chunk-Grenzen nachträglich verbunden.
+  Bei Änderungen bleibt die Berechnung lokal; sehr große Lichtänderungen können kurz verzögert erscheinen.
+- **Sonnenlicht-Schatten** (Schlagschatten von Blöcken auf Blöcke) sind über das Himmelslicht umgesetzt,
+  nicht über eine Schattenkarte.
