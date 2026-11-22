@@ -137,3 +137,18 @@ dem mitgelieferten Debug-Schlüssel (`android/debug.keystore`, Passwort
 - Transparente Bilder (PNG mit Alpha) werden für JPG/PDF automatisch auf
   weißen Hintergrund gelegt.
 - CSV-Trennzeichen (Komma/Semikolon/Tab) werden automatisch erkannt.
+
+---
+
+## 🧱 Blockwelt – Voxel-Sandbox-Spiel
+
+Ein eigenständiges Block-Bauspiel im Browser: `blockwelt/index.html` einfach
+öffnen (Doppelklick genügt, keine Installation, keine Internetverbindung nötig).
+
+- Unendliche, zufallsgenerierte Welt (Wiesen, Wälder, Wüsten, Berge mit Schnee, Seen, Höhlen, Erze)
+- Blöcke abbauen und setzen, 30 Blocktypen, Hotbar und Blockauswahl (`E`)
+- Laufen, Springen, Schwimmen, Fliegen (2× Leertaste oder `F`), Rennen (`Strg` / 2× `W`)
+- Tag/Nacht-Zyklus, Nebel, Umgebungsverdeckung, Unterwasser-Ansicht
+- Automatisches Speichern im Browser, Startwert für reproduzierbare Welten
+- Touch-Steuerung für Handy/Tablet
+- Benötigt einen Browser mit WebGL 2 (aktuelles Chrome, Firefox, Edge, Safari)
